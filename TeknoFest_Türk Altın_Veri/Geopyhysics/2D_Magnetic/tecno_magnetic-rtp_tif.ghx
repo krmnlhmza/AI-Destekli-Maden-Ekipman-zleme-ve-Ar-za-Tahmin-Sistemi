@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<ghx>
+	<RasterHandler>
+		<Colour version="1">
+			<RenderStyle value="RGB" Underviews="0" EnableAlpha="1">
+				<RGB>
+					<Red field="0" band="1" name="RedTransform"/>
+					<Green field="0" band="2" name="GreenTransform"/>
+					<Blue field="0" band="3" name="BlueTransform"/>
+				</RGB>
+			</RenderStyle>
+			<TransformsList>
+				<Transform name="RedTransform" UserDefinedMapping="false">
+					<Description>
+						<Datamapping>0</Datamapping>
+						<PaletteName/>
+					</Description>
+				</Transform>
+				<Transform name="GreenTransform" UserDefinedMapping="false">
+					<Description>
+						<Datamapping>0</Datamapping>
+						<PaletteName/>
+					</Description>
+				</Transform>
+				<Transform name="BlueTransform" UserDefinedMapping="false">
+					<Description>
+						<Datamapping>0</Datamapping>
+						<PaletteName/>
+					</Description>
+				</Transform>
+			</TransformsList>
+		</Colour>
+	</RasterHandler>
+	<miraster version="1">
+		<field index="0">
+			<event time="1782293100">
+				<level resolution="0">
+					<band index="0">
+						<statistics version="3" validityMask="1" sampleCount="582069" validCount="582069" invalidCount="0" invalidNumberCount="0" emptySampleCount="0" nullSampleCount="0" validCellMinX="0" validCellMinY="0" validCellMaxX="772" validCellMaxY="752" min="0" max="0" mean="0" variance="0" stdDev="0" signalToNoise="0" lowerQuartile="0" upperQuartile="0" interquartileRange="0" median="0" mode="0" cellToCellSampleCount="0" cellToCellMin="0" cellToCellMax="0" cellToCellMean="0" cellToCellVariance="0" cellToCellStdDev="0" validHistogram="0">
+							<histogram/>
+						</statistics>
+					</band>
+					<band index="1">
+						<statistics version="3" validityMask="7" sampleCount="582069" validCount="582069" invalidCount="0" invalidNumberCount="0" emptySampleCount="0" nullSampleCount="0" validCellMinX="0" validCellMinY="0" validCellMaxX="772" validCellMaxY="752" min="0" max="255" mean="156.956316175574" variance="12000.9074614158" stdDev="109.54865339846" signalToNoise="1.43275440917269" lowerQuartile="14" upperQuartile="255" interquartileRange="241" median="218" mode="255" cellToCellSampleCount="0" cellToCellMin="0" cellToCellMax="0" cellToCellMean="0" cellToCellVariance="0" cellToCellStdDev="0" validHistogram="1">
+							<histogram version="2" type="2" samples="582069" baseValue="0" binCount="256">
+								<bins>
+									<bin count="105370,0,7872,562,596,0,12529,585,0,0,15054,654,478,0,8106,625,443,0,0,717,481,0,1116,1139,562,0,0,746,619,0,829,2211,668,0,0,1360,635,0,733,2663,591,0,0,2351,709,0,667,1452,884,0,0,0,999,0,657,693,1158,0,0,0,1601,0,625,665,2299,0,601,0,2910,0,490,541,932,0,483,0,0,0,476,517,0,0,474,0,0,0,463,553,0,0,612,621,0,0,695,588,0,0,1482,552,0,0,846,558,0,0,7008,775,0,0,1101,807,0,0,7595,922,0,0,2605,1036,0,0,4650,1181,0,0,0,1199,0,0,3471,990,0,0,0,993,0,0,3125,1465,0,0,0,2001,0,0,3373,1333,0,0,0,0,0,0,3442,0,0,0,0,0,0,0,3573,0,0,0,751,0,0,0,3372,0,0,0,3504,0,0,0,3472,0,0,0,3308,0,0,0,3137,0,0,0,3047,0,0,0,3076,0,0,0,3136,0,0,0,3024,0,0,0,3150,0,0,0,3286,0,0,0,3944,0,0,0,4884,0,0,0,4711,0,0,0,2023,0,0,0,602,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,279899"/>
+								</bins>
+							</histogram>
+						</statistics>
+					</band>
+					<band index="2">
+						<statistics version="3" validityMask="7" sampleCount="582069" validCount="582069" invalidCount="0" invalidNumberCount="0" emptySampleCount="0" nullSampleCount="0" validCellMinX="0" validCellMinY="0" validCellMaxX="772" validCellMaxY="752" min="0" max="255" mean="179.179104195551" variance="9129.88786397553" stdDev="95.5504466968917" signalToNoise="1.87523041900525" lowerQuartile="114" upperQuartile="255" interquartileRange="141" median="226" mode="255" cellToCellSampleCount="0" cellToCellMin="0" cellToCellMax="0" cellToCellMean="0" cellToCellVariance="0" cellToCellStdDev="0" validHistogram="1">
+							<histogram version="2" type="2" samples="582069" baseValue="0" binCount="256">
+								<bins>
+									<bin count="65315,0,3683,603,0,1048,5095,621,0,0,5423,591,0,996,3046,644,0,0,0,754,0,1225,1303,683,0,0,0,780,0,1070,1093,871,0,1119,0,842,0,1105,1144,832,801,897,0,1079,0,632,1068,1416,1223,629,0,2119,0,641,897,646,638,613,0,0,0,597,703,0,610,584,0,0,0,503,633,0,667,649,648,0,0,908,559,0,731,1140,600,0,0,1185,672,0,913,200,568,0,0,1262,480,0,894,0,633,0,0,1081,768,0,859,0,3447,0,784,1304,702,0,869,0,7070,0,1064,1084,1161,0,1166,0,8022,0,980,780,2186,0,948,0,5704,0,988,750,0,0,1056,0,4703,0,945,685,0,0,958,0,4320,0,986,697,0,0,1206,668,3911,0,1100,528,0,0,897,635,3554,0,312,600,0,0,0,669,3160,0,0,656,3207,0,0,662,3242,0,0,650,3473,0,0,753,3697,0,0,914,3905,0,0,1066,3969,0,0,1221,4231,0,0,1608,4588,0,0,2006,5128,0,0,932,5296,0,0,0,6233,0,0,0,8052,0,0,0,10964,0,0,0,15202,0,0,0,7684,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,279899"/>
+								</bins>
+							</histogram>
+						</statistics>
+					</band>
+					<band index="3">
+						<statistics version="3" validityMask="7" sampleCount="582069" validCount="582069" invalidCount="0" invalidNumberCount="0" emptySampleCount="0" nullSampleCount="0" validCellMinX="0" validCellMinY="0" validCellMaxX="772" validCellMaxY="752" min="0" max="255" mean="163.823905756878" variance="11602.3825077417" stdDev="107.714356089342" signalToNoise="1.52091059822143" lowerQuartile="14" upperQuartile="255" interquartileRange="241" median="226" mode="255" cellToCellSampleCount="0" cellToCellMin="0" cellToCellMax="0" cellToCellMean="0" cellToCellVariance="0" cellToCellStdDev="0" validHistogram="1">
+							<histogram version="2" type="2" samples="582069" baseValue="0" binCount="256">
+								<bins>
+									<bin count="113582,0,7780,0,0,1040,9518,0,0,0,9565,0,0,935,5426,0,0,0,2041,0,0,828,2198,0,0,0,2807,0,0,638,1059,0,0,0,0,0,0,617,0,0,0,0,0,0,0,500,0,0,0,515,0,0,0,532,0,0,410,495,0,0,0,534,0,0,1134,526,0,0,0,571,0,0,1126,505,0,0,0,554,0,0,1002,584,0,0,0,551,0,0,856,699,0,0,0,963,0,0,902,1724,0,0,0,3222,0,0,703,2039,3038,0,0,0,0,0,678,0,8218,0,0,0,0,0,520,0,6369,0,489,0,0,0,488,0,5627,0,511,0,0,0,513,0,4757,0,549,0,0,0,554,0,4186,0,592,0,0,0,616,0,3880,0,731,0,0,0,702,0,3457,0,937,0,0,0,1407,0,3312,0,2115,0,3289,0,2714,0,2789,0,1269,0,2926,0,0,0,2901,0,0,0,2940,0,0,0,3007,0,0,0,3215,0,0,0,3610,0,0,0,3853,0,0,0,4050,0,0,0,4622,0,0,0,5922,0,0,0,7434,0,0,0,11267,0,0,0,3435,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,279899"/>
+								</bins>
+							</histogram>
+						</statistics>
+					</band>
+				</level>
+			</event>
+		</field>
+	</miraster>
+</ghx>
