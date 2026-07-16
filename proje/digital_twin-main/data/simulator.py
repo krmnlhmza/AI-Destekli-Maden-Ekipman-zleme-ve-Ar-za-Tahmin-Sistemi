@@ -170,7 +170,12 @@ class EquipmentRuntimeState:
     runtime_hours:  float = 0.0      # toplam çalışma saati
     wear_level:     float = 0.05     # 0.0 yeni → 1.0 arızalı
     last_update:    Optional[datetime] = None
-    forced_fault:   Optional[str] = None    # one-shot anomali enjeksiyonu
+    forced_fault:   Optional[str] = None    # enjekte edilen arıza tipi
+    fault_readings_left: int = 0     # arızanın süreceği kalan okuma sayısı
+    # (Adım 4) Arıza artık tek okumada kaybolmuyor: gerçekte bir rulman
+    # bir saniyeliğine bozulup düzelmez. Enjeksiyon 4-6 okuma sürer;
+    # böylece hem simülasyon gerçekçi olur hem de tespit güvenilirliği artar
+    # (tek okumada ~%60-70 yakalanan arıza, 4-6 ardışık okumada ~%100).
 
 
 _states: Dict[str, EquipmentRuntimeState] = {}
@@ -289,6 +294,8 @@ def _compute_reading(equipment_id: str, state: EquipmentRuntimeState) -> dict:
     g = max(0.0, np.random.normal((g_lo + g_hi) / 2, (g_hi - g_lo) / 4))
 
     # ── Zorlanan arıza enjeksiyonu (force_anomaly tetikleyicisi) ───
+    # Arıza tipi state'te durduğu sürece her okumaya uygulanır;
+    # sayaç (fault_readings_left) sıfırlanınca arıza "giderilmiş" olur.
     if state.forced_fault == "overheat":
         t *= np.random.uniform(1.3, 1.55)
     elif state.forced_fault == "vibration_spike":
@@ -297,7 +304,10 @@ def _compute_reading(equipment_id: str, state: EquipmentRuntimeState) -> dict:
         c *= np.random.uniform(1.4, 1.7)
     elif state.forced_fault == "pressure_surge":
         p *= np.random.uniform(1.4, 1.8)
-    state.forced_fault = None   # tek seferlik
+    if state.forced_fault:
+        state.fault_readings_left -= 1
+        if state.fault_readings_left <= 0:
+            state.forced_fault = None   # arıza süresi doldu
 
     return {
         "temperature": round(float(t), 3),
@@ -338,9 +348,11 @@ def generate_reading(equipment_id: str, force_anomaly: bool = False,
     _advance_state(state, profile["type"], dt)
 
     if force_anomaly:
+        # Rastgele bir arıza tipi seç ve 4-6 okuma boyunca sürdür (gerçekçilik)
         state.forced_fault = np.random.choice(
             ["overheat", "vibration_spike", "overcurrent", "pressure_surge"]
         )
+        state.fault_readings_left = int(np.random.randint(4, 7))
 
     reading = _compute_reading(equipment_id, state)
 

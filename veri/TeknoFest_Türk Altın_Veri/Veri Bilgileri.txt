@@ -1,0 +1,23 @@
+Assay: 
+Sondajlardan elde edilen karotlardan alınan numunelerin laboratuvarda analiz edilmesiyle elde edilen element sonuçlarıdır. Üç boyutlu modellemede belirli derinliklerde element tenörlerinin (ppm, ppb, %, g/t vb.) dağılımını göstermek için kullanılır.
+
+Collar:
+Sondajların koordinat, kot, doğrultu (azimut), eğim, planlanan derinlik gibi bilgileri içeren veri setidir.
+
+Geology: 
+Sondaj loglarını oluşturan jeolojik veridir. Karot boyunca gözlenen litoloji, alterasyon, mineralizasyon ve diğer jeolojik bilgileri içerir.
+
+Survey:
+Sondaj ilerledikçe yerin altında sondaj kuyusunun konumunu belirlemek amacıyla belirli derinliklerde alınan doğrultu ve eğim ölçümleridir. Üç boyutlu modellemede sondajın konumunu ve sapmasını belirlemek için kullanılır.
+
+Soil samples :
+Toprağın altındaki yerli kayaçların bünyesindeki elementlerin, kimyasal ve fiziksel deformansyonlar sonucu toprağa taşınması sebebiyle toprağın B zonundan alınan yüzey numuneleridir. Analiz sonuçları ve koordinat bilgileri kullanılarak jeokimyasal anomaliler belirlenir ve sondaj hedeflerinin en doğru şekilde planlanması için kullanılır.
+
+Yer manyetiği(2D Manyetik):
+Manyetik verilerin harita veya profil üzerinde iki boyutlu gösterimidir. Faylar, dayklar, litolojik kontaklar ve manyetik kayaçların yüzeydeki dağılımını belirlemek için kullanılır.
+
+3D Manyetik:
+2D manyetik verilerin modelleme yöntemleriyle derinlik bilgisinin eklenmesiyle oluşturulan üç boyutlu yeraltı modelidir. Manyetik anomalilerin yer altındaki geometrisini ve derinliğini yorumlamak için kullanılır.
+
+Topoğrafya:
+Çalışılan alanın eş yükselti eğrileri kullanılarak oluşturulan, yükseklik  verisi içeren yeryüzü verisidir.

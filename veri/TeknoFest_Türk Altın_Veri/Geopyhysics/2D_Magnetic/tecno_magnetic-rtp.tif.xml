@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gmd:MD_Metadata xsi:schemaLocation="http://www.isotc211.org/2005/gmd ../schemas/iso19139fra/gmd/gmd.xsd" xmlns:fo="http://www.w3.org/1999/XSL/Format" xmlns:map="urn:brgm:mapping" xmlns:gmd="http://www.isotc211.org/2005/gmd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:gml="http://www.opengis.net/gml" xmlns:gts="http://www.isotc211.org/2005/gts" xmlns:gmx="http://www.isotc211.org/2005/gmx" xmlns:gfc="http://www.isotc211.org/2005/gfc" xmlns:gco="http://www.isotc211.org/2005/gco">
+	<geosoft xmlns="http://www.geosoft.com/schema/geo">
+		<dataset version="1">
+			<lineage>
+				<process name="MapExport" user="Mehmet Ali Güngör" version="Version 2025.2.1 (20260205.53)" date="2026-06-24" time="12:15:48">
+					<parameter name="MAPEXPORT.ACTIVEVIEW" value="Data" type="string"/>
+					<parameter name="MAPEXPORT.BITS" value="24" type="integer"/>
+					<parameter name="MAPEXPORT.CELLSIZE" value="10.1594047936467" type="double"/>
+					<parameter name="MAPEXPORT.DITHER" value="FloydsteinDithering" type="string"/>
+					<parameter name="MAPEXPORT.FORMAT" value="GeoTIFF (*.tif)" type="string"/>
+					<parameter name="MAPEXPORT.MAXX" value="300.191326530613" type="double"/>
+					<parameter name="MAPEXPORT.MAXY" value="296.36479591839" type="double"/>
+					<parameter name="MAPEXPORT.MINX" value="-0.191326530610677" type="double"/>
+					<parameter name="MAPEXPORT.MINY" value="3.6352040816471" type="double"/>
+					<parameter name="MAPEXPORT.NAME" value="..\Tecno_geophysics\Magnetic_RTP\tecno_magnetic-rtp.tif" type="string"/>
+					<parameter name="MAPEXPORT.OPTIONS" value="" type="string"/>
+					<parameter name="MAPEXPORT.OUTPUT" value="FILE" type="string"/>
+					<parameter name="MAPEXPORT.SELECTEDGROUP" value="Data" type="string"/>
+					<parameter name="MAPEXPORT.SIZEX" value="773" type="integer"/>
+					<parameter name="MAPEXPORT.SIZEY" value="753" type="integer"/>
+					<parameter name="MAPEXPORT.VIEWS" value="1" type="integer"/>
+				</process>
+			</lineage>
+			<title>tecno_magnetic-rtp</title>
+			<file_format>tif</file_format>
+			<project_name>d:\magungor local data\desktop\tecnofest_hd_data-manuple\tecnofest_tr.gpf</project_name>
+			<data_created_by>Mehmet Ali Güngör</data_created_by>
+			<data_creation_date>2026-06-24</data_creation_date>
+			<metadata_created_by>Mehmet Ali Güngör</metadata_created_by>
+			<metadata_creation_date>2026-06-24</metadata_creation_date>
+			<georeference>
+				<dataextents>
+					<extent2d minx="475000.07970239682" miny="4418052.079702395" maxx="482843.14020309207" maxy="4425691.9521072172"/>
+				</dataextents>
+				<projection type="TRANSVERSE_MERCATOR" name="ED50 / UTM zone 36N" wellknown_epsg="23036" projection="UTM zone 36N" ellipsoid="International 1924" datum="ED50" datumtrf="ED50 to WGS 84 (1)" datumtrf_epsg="1133" datumtrf_description="[ED50] (10m) Europe - west (DMA ED50 mean)" radius="6378388" eccentricity="0.081991889979029772">
+					<shift x="-87" y="-98" z="-121"/>
+					<parameters scale="0.9996" false_east="500000" false_north="0" lat_origin="0" lon_origin="33"/>
+					<units name="m" unit_scale="1"/>
+				</projection>
+			</georeference>
+		</dataset>
+	</geosoft>
+	<gmd:dataQualityInfo>
+		<gmd:DQ_DataQuality>
+			<gmd:lineage>
+				<gmd:LI_Lineage>
+					<gmd:processStep xlink:type="Geosoft Process" xlink:title="MapExport">
+						<gmd:LI_ProcessStep>
+							<gmd:dateTime>
+								<gco:DateTime>2026-06-24T12:15:48</gco:DateTime>
+							</gmd:dateTime>
+							<gmd:processor>
+								<gmd:CI_ResponsibleParty>
+									<gmd:individualName>
+										<gco:CharacterString>Mehmet Ali Güngör</gco:CharacterString>
+									</gmd:individualName>
+								</gmd:CI_ResponsibleParty>
+							</gmd:processor>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.ACTIVEVIEW" xlink:title="Data">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.BITS" xlink:title="24">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.CELLSIZE" xlink:title="10.1594047936467">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.DITHER" xlink:title="FloydsteinDithering">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.FORMAT" xlink:title="GeoTIFF (*.tif)">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.MAXX" xlink:title="300.191326530613">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.MAXY" xlink:title="296.36479591839">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.MINX" xlink:title="-0.191326530610677">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.MINY" xlink:title="3.6352040816471">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.NAME" xlink:title="..\Tecno_geophysics\Magnetic_RTP\tecno_magnetic-rtp.tif">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.OPTIONS" xlink:title="">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.OUTPUT" xlink:title="FILE">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.SELECTEDGROUP" xlink:title="Data">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.SIZEX" xlink:title="773">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.SIZEY" xlink:title="753">
+								<gmd:LI_Source/>
+							</gmd:source>
+							<gmd:source xlink:type="Data Parameter" xlink:role="MAPEXPORT.VIEWS" xlink:title="1">
+								<gmd:LI_Source/>
+							</gmd:source>
+						</gmd:LI_ProcessStep>
+					</gmd:processStep>
+				</gmd:LI_Lineage>
+			</gmd:lineage>
+		</gmd:DQ_DataQuality>
+	</gmd:dataQualityInfo>
+	<gmd:identificationInfo>
+		<gmd:MD_DataIdentification>
+			<gmd:citation>
+				<gmd:CI_Citation>
+					<gmd:title>
+						<gco:CharacterString>tecno_magnetic-rtp</gco:CharacterString>
+					</gmd:title>
+					<gmd:collectiveTitle>
+						<gco:CharacterString>d:\magungor local data\desktop\tecnofest_hd_data-manuple\tecnofest_tr.gpf</gco:CharacterString>
+					</gmd:collectiveTitle>
+					<gmd:date>
+						<gmd:CI_Date>
+							<gmd:date>
+								<gco:Date>2026-6-24</gco:Date>
+							</gmd:date>
+						</gmd:CI_Date>
+					</gmd:date>
+				</gmd:CI_Citation>
+			</gmd:citation>
+			<gmd:resourceFormat>
+				<gmd:MD_Format>
+					<gmd:name>
+						<gco:CharacterString>tif</gco:CharacterString>
+					</gmd:name>
+				</gmd:MD_Format>
+			</gmd:resourceFormat>
+			<gmd:pointOfContact>
+				<gmd:CI_ResponsibleParty>
+					<gmd:individualName>
+						<gco:CharacterString>Mehmet Ali Güngör</gco:CharacterString>
+					</gmd:individualName>
+				</gmd:CI_ResponsibleParty>
+			</gmd:pointOfContact>
+			<gmd:extent>
+				<gmd:EX_Extent>
+					<gmd:geographicElement>
+						<gmd:EX_GeographicBoundingBox>
+							<gmd:westBoundLongitude>
+								<gco:Decimal>32.706805070371452</gco:Decimal>
+							</gmd:westBoundLongitude>
+							<gmd:eastBoundLongitude>
+								<gco:Decimal>32.798860375812581</gco:Decimal>
+							</gmd:eastBoundLongitude>
+							<gmd:southBoundLatitude>
+								<gco:Decimal>39.910591409988392</gco:Decimal>
+							</gmd:southBoundLatitude>
+							<gmd:northBoundLatitude>
+								<gco:Decimal>39.979620438226597</gco:Decimal>
+							</gmd:northBoundLatitude>
+						</gmd:EX_GeographicBoundingBox>
+					</gmd:geographicElement>
+				</gmd:EX_Extent>
+			</gmd:extent>
+		</gmd:MD_DataIdentification>
+	</gmd:identificationInfo>
+	<gmd:contact>
+		<gmd:CI_ResponsibleParty>
+			<gmd:individualName>
+				<gco:CharacterString>Mehmet Ali Güngör</gco:CharacterString>
+			</gmd:individualName>
+		</gmd:CI_ResponsibleParty>
+	</gmd:contact>
+	<gmd:dateStamp>
+		<gco:Date>2026-6-24</gco:Date>
+	</gmd:dateStamp>
+	<gmd:referenceSystemInfo>
+		<gmd:MD_ReferenceSystem>
+			<gmd:referenceSystemIdentifier>
+				<gmd:RS_Identifier>
+					<gmd:codeSpace>
+						<gco:CharacterString>ESRI</gco:CharacterString>
+					</gmd:codeSpace>
+					<gmd:code>
+						<gco:CharacterString>PROJCS["ED_1950_UTM_Zone_36N",GEOGCS["GCS_European_1950",DATUM["D_European_1950",SPHEROID["International_1924",6378388.0,297.0]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["False_Easting",500000.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",33.0],PARAMETER["Scale_Factor",0.9996],PARAMETER["Latitude_Of_Origin",0.0],UNIT["Meter",1.0],AUTHORITY["EPSG",23036]]</gco:CharacterString>
+					</gmd:code>
+					<gmd:version>
+						<gco:CharacterString>1</gco:CharacterString>
+					</gmd:version>
+				</gmd:RS_Identifier>
+			</gmd:referenceSystemIdentifier>
+		</gmd:MD_ReferenceSystem>
+	</gmd:referenceSystemInfo>
+</gmd:MD_Metadata>

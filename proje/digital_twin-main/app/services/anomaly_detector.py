@@ -1,73 +1,71 @@
 """
-Isolation Forest Tabanlı Anomali Tespiti
------------------------------------------
-Sensör okumasını (sıcaklık, titreşim, basınç, akım, hız) Isolation Forest
-ile değerlendirir; anormalse, ekipmanın kendi normal aralığına göre
-hangi sensörün ne kadar saptığını açıklayan bir özet üretir.
+Isolation Forest Tabanlı Anomali Tespiti  (Adım 4'te yenilendi)
+-----------------------------------------------------------------
+Sensör okumasını (sıcaklık, titreşim, basınç, akım, hız) ekipmanın KENDİ
+Isolation Forest modeliyle değerlendirir ve KALİBRE edilmiş 0-1 skor üretir.
 
-Model `ml/train.py` ile eğitilir, buradan yüklenir.
-Eğitilmiş model yoksa simülatör verisiyle hızlı bir bootstrap yapılır —
-ama doğruluk için her zaman `python ml/train.py` çağrılması önerilir.
+Eski halinden farkı (neden değişti?):
+  • Eski: tüm makineler tek modeldi ve ham skor "0.5 - score_samples"
+    formülüyle 0-1'e sıkıştırılıyordu → normal okumalar bile ~0.92 alıyor,
+    0.6/0.7 eşikleri hiçbir şey ayırt etmiyordu.
+  • Yeni: her makinenin kendi modeli var (ml/if_<ekipman>.pkl) ve skor,
+    eğitim sırasında çıkarılan "normal şöyle puan alır / arızalı böyle"
+    istatistiğine göre haritalanıyor (np.interp ile). Artık:
+        sağlıklı makine  → ~0.10-0.30
+        0.6 üzeri        → UYARI  (dashboard kırmızı "ANOMALİ")
+        0.7 üzeri        → KRİTİK (n8n bildirim zinciri tetiklenir)
+    Bu eşikler sunumdaki (Slayt 9) anlatıyla birebir aynıdır.
+
+Model `ml/train.py` ile eğitilir; dosya yoksa ilk istekte otomatik eğitilir.
 """
 
-import numpy as np
-import pickle
 import os
-from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
+import pickle
 from typing import Dict, Optional
 
-IF_PATH     = "ml/isolation_forest.pkl"
-SCALER_PATH = "ml/scaler.pkl"
+import numpy as np
 
-_model:  IsolationForest = None
-_scaler: StandardScaler  = None
+# Sunumla birebir eşikler — başka dosyalar da (dashboard, n8n filtresi) bunları
+# referans alabilsin diye burada sabit olarak dururlar
+UYARI_ESIGI  = 0.6   # dashboard karta kırmızı "ANOMALİ" basar
+KRITIK_ESIGI = 0.7   # n8n bildirim + PDF + log zinciri tetiklenir
+
+IF_BUNDLE_TMPL = "ml/if_{eq}.pkl"
+
+FEATURES = ["temperature", "vibration", "pressure", "current", "speed"]
+
+# Ekipman başına yüklenen model paketleri (bellek içi önbellek):
+# {ekipman_id: {"model": IsolationForest, "scaler": StandardScaler, "calib": {...}}}
+_bundles: Dict[str, dict] = {}
 
 
-# ─────────────────────────────────────────────────────────────────
-# Model yükleme
-# ─────────────────────────────────────────────────────────────────
+def _load_bundle(equipment_id: str) -> dict:
+    """Ekipmanın model paketini getirir. Sıra: önbellek → disk → yerinde eğitim.
+    (Yerinde eğitim yalnız 'model dosyası silinmiş' durumunun sigortasıdır;
+    asıl eğitim her zaman `python ml/train.py` ile yapılmalıdır.)"""
+    if equipment_id in _bundles:
+        return _bundles[equipment_id]
+
+    path = IF_BUNDLE_TMPL.format(eq=equipment_id)
+    if os.path.exists(path):
+        with open(path, "rb") as f:
+            _bundles[equipment_id] = pickle.load(f)
+    else:
+        print(f"⚠  {path} yok — {equipment_id} için geçici model eğitiliyor "
+              f"(kalıcısı için: python ml/train.py)")
+        import sys
+        sys.path.insert(0, os.getcwd())
+        from ml.train import train_one_equipment
+        _bundles[equipment_id] = train_one_equipment(equipment_id, save=True)
+    return _bundles[equipment_id]
+
+
 def _load() -> None:
-    global _model, _scaler
-    if _model is None:
-        if os.path.exists(IF_PATH) and os.path.exists(SCALER_PATH):
-            with open(IF_PATH,     "rb") as f: _model  = pickle.load(f)
-            with open(SCALER_PATH, "rb") as f: _scaler = pickle.load(f)
-        else:
-            _bootstrap()
-
-
-def _bootstrap() -> None:
-    """
-    Eğitilmiş model dosyaları yoksa, simülatör verisiyle hızlı eğitim yapar.
-    `ml/train.py` ile aynı veri kaynağını kullanır (birim tutarlılığı için
-    kritik) — sadece daha az örnek, daha hızlı.
-
-    Önemli: kullanıcı uyarılır → asıl eğitim `python ml/train.py` ile.
-    """
-    global _model, _scaler
-    from data.simulator import generate_training_data
-
-    print("⚠  ml/isolation_forest.pkl bulunamadı — simülatör verisiyle "
-          "geçici model üretiliyor. Doğruluk için: python ml/train.py")
-
-    df = generate_training_data(n_samples=2000)
-    features = ["temperature", "vibration", "pressure", "current", "speed"]
-    X = df[features].values
-
-    _scaler = StandardScaler()
-    X_s = _scaler.fit_transform(X)
-
-    _model = IsolationForest(
-        n_estimators=200,
-        contamination=0.05,   # simülatörün ~%5 anomali oranıyla hizalı
-        random_state=42,
-    )
-    _model.fit(X_s)
-
-    os.makedirs("ml", exist_ok=True)
-    with open(IF_PATH,     "wb") as f: pickle.dump(_model,  f)
-    with open(SCALER_PATH, "wb") as f: pickle.dump(_scaler, f)
+    """Uygulama açılışında çağrılır: tüm ekipmanların modellerini önden yükle
+    (ilk sensör mesajında bekleme olmasın)."""
+    from data.simulator import EQUIPMENT_PROFILES
+    for eq_id in EQUIPMENT_PROFILES:
+        _load_bundle(eq_id)
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -77,47 +75,42 @@ def detect(reading: Dict, equipment_id: Optional[str] = None) -> Dict:
     """
     Tek bir sensör okumasını değerlendirir.
 
-    Parametreler:
-        reading: {temperature, vibration, pressure, current, speed,
-                  [equipment_id, equipment_type, gas, ...]} dict.
-        equipment_id: açıkça verilirse kullanılır; verilmezse reading'den
-                      okunur. Bu, açıklama (description) üretirken
-                      ekipmanın kendi kritik eşiklerini kullanmamızı sağlar.
-
-    Dönüş:
-        {is_anomaly, anomaly_score, description}.
-        description sadece anomali ise dolu; ekipmanın profiline göre
-        sapan tüm sensörleri ölçü değerleriyle birlikte listeler.
+    Dönüş: {is_anomaly, anomaly_score, description}
+      • anomaly_score : kalibre 0-1 skor (0.10-0.30 = sağlıklı bölge)
+      • is_anomaly    : skor >= 0.6 (UYARI eşiği) — dashboard ve loglar
+                        bu bayrağı kullanır; böylece rozet ile skor çubuğu
+                        asla birbiriyle çelişmez (eski sürümdeki hata buydu)
+      • description   : yalnız anomalide dolu; hangi sensörün ne kadar
+                        saptığını ekipmanın kendi eşikleriyle anlatır
     """
-    _load()
-
-    x = np.array([[
-        reading["temperature"],
-        reading["vibration"],
-        reading["pressure"],
-        reading["current"],
-        reading["speed"],
-    ]])
-    x_scaled = _scaler.transform(x)
-    prediction = _model.predict(x_scaled)[0]
-    raw_score  = float(_model.score_samples(x_scaled)[0])
-
-    # score_samples negatif → daha küçük (daha negatif) = daha anormal.
-    # 0-1 aralığına normalize: -0.5'i merkez al, 1'e kadar tara.
-    normalized = float(np.clip(1 - (raw_score + 0.5), 0.0, 1.0))
-    is_anomaly = prediction == -1
-
     eq_id = equipment_id or reading.get("equipment_id")
+    bundle = _load_bundle(eq_id) if eq_id else None
+    if bundle is None:
+        # Ekipman kimliği yoksa ilk profilin modeline düş (geriye dönük güven)
+        from data.simulator import EQUIPMENT_PROFILES
+        eq_id = next(iter(EQUIPMENT_PROFILES))
+        bundle = _load_bundle(eq_id)
+
+    x = np.array([[reading[k] for k in FEATURES]], dtype=float)
+
+    # Ham skor → kalibre skor: eğitimde saklanan çapa noktalarıyla haritala.
+    # (score_samples daha negatif = daha anormal; -raw ile yönü çeviriyoruz)
+    raw = float(bundle["model"].score_samples(bundle["scaler"].transform(x))[0])
+    score = float(np.clip(
+        np.interp(-raw, bundle["calib"]["xp"], bundle["calib"]["fp"]), 0.0, 1.0))
+
+    is_anomaly = score >= UYARI_ESIGI
 
     return {
         "is_anomaly":    bool(is_anomaly),
-        "anomaly_score": round(normalized, 4),
-        "description":   _describe(reading, normalized, eq_id) if is_anomaly else None,
+        "anomaly_score": round(score, 4),
+        "description":   _describe(reading, score, eq_id) if is_anomaly else None,
     }
 
 
 # ─────────────────────────────────────────────────────────────────
 # Açıklama üretimi — ekipmanın kendi eşikleriyle, çoklu sensör
+# (Adım 4'te değişmedi; zaten doğru çalışıyordu)
 # ─────────────────────────────────────────────────────────────────
 _SENSOR_LABELS = {
     "temperature": ("Sıcaklık", "°C"),
@@ -130,12 +123,11 @@ _SENSOR_LABELS = {
 def _describe(r: Dict, score: float, equipment_id: Optional[str]) -> str:
     """
     Sapan tüm sensörleri ekipmanın **kendi** normal aralığı ve kritik
-    eşiğiyle karşılaştırarak listeler. Eğer ekipman tanınmıyorsa,
-    simülatörün ilk profilini varsayılan alır (geriye dönük güven).
+    eşiğiyle karşılaştırarak listeler.
 
     Çıktı örneği:
         "Anomali (LH517i_001): KRİTİK Titreşim (12.5 mm/s ≥ 12.6 mm/s),
-         yüksek Sıcaklık (94.3 °C, kritiğe %45) — skor 0.823"
+         yüksek sıcaklık (94.3 °C, kritiğe %45) — skor 0.823"
     """
     from data.simulator import EQUIPMENT_PROFILES, critical_thresholds
 
@@ -168,6 +160,7 @@ def _describe(r: Dict, score: float, equipment_id: Optional[str]) -> str:
             issues.append(f"düşük basınç ({p_val:.1f} bar, normal ≥ {p_lo:.1f})")
 
     if not issues:
-        issues.append("çoklu parametre sapması (model tespit etti, eşik altı)")
+        issues.append("çoklu parametre sapması (tek sensör eşik aşmadı, "
+                      "örüntü anormal)")
 
     return f"Anomali ({eq_id}): {', '.join(issues)} — skor {score:.3f}"
