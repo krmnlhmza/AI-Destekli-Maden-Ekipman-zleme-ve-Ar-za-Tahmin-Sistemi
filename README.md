@@ -12,3 +12,8 @@
 | `veri/` | TeknoFest Türk Altın jeofizik/sondaj veri seti |
 
 Kaggle kestirimci bakım veri seti (arıza oranı referansı): `proje/digital_twin-main/data/predictive_maintenance.csv`
+
+
+## RAG Embedding Modeli (Adım 6)
+
+RAG asistanı **yerli** `ytu-ce-cosmos/turkish-e5-large` modelini kullanır (YTÜ COSMOS, açık kaynak). Model ilk çalıştırmada Hugging Face'ten otomatik iner (~2.2 GB, tek seferlik) ve tamamen yerel çalışır. Farklı bir bilgisayarda ilk açılış bu yüzden uzun sürer — normaldir.

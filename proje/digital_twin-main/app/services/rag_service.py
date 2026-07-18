@@ -14,10 +14,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 COLLECTION = "sandvik_knowledge"
-VECTOR_SIZE = 384
-# Türkçe sorgularda doğruluk için multilingual model. all-MiniLM-L6-v2 ile
-# aynı vektör boyutu (384) → mevcut Qdrant şeması drop-in uyumlu.
-EMBED_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
+# (Adım 6) Millileşme hamlesi — sunum Slayt 9'daki "tamamen yerli, açık
+# kaynak embedding" iddiasının karşılığı: Yıldız Teknik Üniversitesi COSMOS
+# grubunun Türkçe için geliştirdiği Turkish-E5 modeli. Tamamen yerel çalışır
+# (bulut yok), ilk açılışta Hugging Face'ten bir kez indirilir (~2.2 GB).
+# E5 ailesi kuralı: dokümanlar "passage: ", sorgular "query: " önekiyle
+# kodlanır — öneksiz kullanılırsa arama kalitesi ciddi düşer.
+EMBED_MODEL = "ytu-ce-cosmos/turkish-e5-large"
+VECTOR_SIZE = 1024   # turkish-e5-large çıktı boyutu (eski MiniLM 384 idi)
 
 _encoder: SentenceTransformer = None
 _qdrant: QdrantClient = None
@@ -42,8 +46,21 @@ def _get_qdrant():
 
 
 def _ensure_collection():
+    """Koleksiyonu hazırlar. (Adım 6) Önemli ders: model değişince eski
+    vektörler ÇÖPTÜR — sorgu yeni modelin geometrisinde, kayıtlar eskininki.
+    Haziran'da tam bu yaşandı: koleksiyon eski modelle yazılmış, kod
+    "kayıt var, dokunma" deyip hiç tazelememişti; "motor aşırı ısınma"
+    sorusu yangın söndürme bloğunu getiriyordu. Bu yüzden: boyut uyuşmazsa
+    koleksiyon SİLİNİP yeniden kurulur (12 blok, saniyeler sürer)."""
     q = _get_qdrant()
     existing = [c.name for c in q.get_collections().collections]
+    if COLLECTION in existing:
+        mevcut_boyut = q.get_collection(COLLECTION).config.params.vectors.size
+        if mevcut_boyut != VECTOR_SIZE:
+            print(f"RAG: koleksiyon eski modelden kalma ({mevcut_boyut} boyut) — "
+                  f"siliniyor, {VECTOR_SIZE} boyutla yeniden kurulacak.")
+            q.delete_collection(COLLECTION)
+            existing.remove(COLLECTION)
     if COLLECTION not in existing:
         q.create_collection(
             collection_name=COLLECTION,
@@ -175,7 +192,8 @@ def index_knowledge():
 
     points = []
     for i, doc in enumerate(KNOWLEDGE_BASE):
-        text = f"{doc['title']}: {doc['content']}"
+        # E5 kuralı: doküman tarafı "passage: " önekiyle kodlanır
+        text = f"passage: {doc['title']}: {doc['content']}"
         vector = enc.encode(text).tolist()
         points.append(PointStruct(
             id=i + 1,
@@ -203,7 +221,8 @@ def query(question: str, limit: int = 3) -> List[Dict]:
     enc = _get_encoder()
     q   = _get_qdrant()
 
-    vector  = enc.encode(question).tolist()
+    # E5 kuralı: sorgu tarafı "query: " önekiyle kodlanır
+    vector  = enc.encode(f"query: {question}").tolist()
     response = q.query_points(
         collection_name=COLLECTION,
         query=vector,

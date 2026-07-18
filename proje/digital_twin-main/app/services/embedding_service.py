@@ -21,7 +21,7 @@ import uuid
 load_dotenv()
 
 COLLECTION_NAME = "anomaly_logs"
-VECTOR_SIZE = 384
+VECTOR_SIZE = 1024   # turkish-e5-large (rag_service ile aynı model/boyut)
 
 _encoder: SentenceTransformer = None
 _qdrant: QdrantClient = None
@@ -30,9 +30,10 @@ _qdrant: QdrantClient = None
 def _get_encoder() -> SentenceTransformer:
     global _encoder
     if _encoder is None:
-        # rag_service ile aynı multilingual model — Türkçe açıklamalar
-        # için doğruluk; ikisi 384 boyutlu olduğundan koleksiyon uyumu bozulmaz.
-        _encoder = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+        # (Adım 6) rag_service ile AYNI yerli model (YTÜ Turkish-E5) —
+        # tek model belleğe bir kez yüklenir, iki servis paylaşır.
+        from app.services.rag_service import _get_encoder as rag_encoder
+        _encoder = rag_encoder()
     return _encoder
 
 
@@ -49,6 +50,13 @@ def _get_qdrant() -> QdrantClient:
 
 def _ensure_collection(client: QdrantClient):
     existing = [c.name for c in client.get_collections().collections]
+    # Model değişmişse (vektör boyutu farklıysa) eski koleksiyon çöptür:
+    # sil, yeni boyutla kur. Geçmiş anomali hafızası sıfırlanır — sorun değil,
+    # canlı akış onu dakikalar içinde yeniden doldurur.
+    if COLLECTION_NAME in existing:
+        if client.get_collection(COLLECTION_NAME).config.params.vectors.size != VECTOR_SIZE:
+            client.delete_collection(COLLECTION_NAME)
+            existing.remove(COLLECTION_NAME)
     if COLLECTION_NAME not in existing:
         client.create_collection(
             collection_name=COLLECTION_NAME,
