@@ -94,12 +94,27 @@ def train_one_equipment(eq_id: str, df_pool=None, save: bool = True) -> dict:
     normal = d[~d.is_anomaly][FEATURES].values
     anom   = d[d.is_anomaly][FEATURES].values
 
-    # Ölçekleyici de yalnız normalden öğrenir (arıza ortalamayı kaydırmasın)
-    scaler = StandardScaler().fit(normal)
+    # KRİTİK: normal veri ikiye bölünür —
+    #   %70'i modelin EĞİTİMİNE girer,
+    #   %30'u modelden SAKLANIR ve kalibrasyon çapaları bu saklanan
+    #   (hold-out) parçadan hesaplanır.
+    # Neden? Model, eğitimde gördüğü noktalara "tanıdık" diye iyimser puan
+    # verir; çapaları o iyimser puanlarla kurarsak gerçek (taze) veri
+    # eşiği kolayca aşar. İlk denemede bu hatayı yaptık: eğitim verisinde
+    # %1 görünen yanlış alarm, taze veride %20-30 çıktı. Hold-out ile
+    # çapalar "modelin hiç görmediği normal veri şöyle puan alır"
+    # gerçeğine göre kurulur ve taze veri ölçümü eğitim raporuyla tutar.
+    rng = np.random.default_rng(42)
+    idx = rng.permutation(len(normal))
+    kesim = int(len(normal) * 0.7)
+    normal_egitim, normal_saklanan = normal[idx[:kesim]], normal[idx[kesim:]]
+
+    # Ölçekleyici de yalnız eğitim parçasından öğrenir
+    scaler = StandardScaler().fit(normal_egitim)
     model = IsolationForest(n_estimators=200,
                             contamination=_kaggle_failure_rate(),
-                            random_state=42).fit(scaler.transform(normal))
-    calib = _calibrate(model.score_samples(scaler.transform(normal)),
+                            random_state=42).fit(scaler.transform(normal_egitim))
+    calib = _calibrate(model.score_samples(scaler.transform(normal_saklanan)),
                        model.score_samples(scaler.transform(anom)))
 
     bundle = {"model": model, "scaler": scaler, "calib": calib}
@@ -109,9 +124,10 @@ def train_one_equipment(eq_id: str, df_pool=None, save: bool = True) -> dict:
             pickle.dump(bundle, f)
 
     # ── Kabul testi: eşik 0.6 ile tek-okuma performansı ─────────────
+    # Yanlış alarm SAKLANAN parçada ölçülür (dürüst, taze-veri tahmini).
     # Not: canlıda arızalar 4-6 ardışık okuma sürer (simulator değişikliği);
     # tek okumada %60-70 yakalama, olay bazında pratikte ~%100 demektir.
-    s_n = apply_calibration(model, scaler, calib, normal)
+    s_n = apply_calibration(model, scaler, calib, normal_saklanan)
     s_a = apply_calibration(model, scaler, calib, anom)
     bundle["kabul"] = {
         "recall_tek_okuma": float((s_a >= 0.6).mean()),
@@ -173,23 +189,38 @@ BATCH_SIZE = 128
 
 
 def train_lstm():
-    print("\n── LSTM eğitiliyor (simülatör verisi) ──")
+    print("\n── LSTM eğitiliyor (zaman-sıralı simülatör verisi) ──")
+    # Neden yenilendi (Adım 5)?
+    #   Eski hali: generate_training_data'nın KARIŞIK (birbiriyle ilgisiz,
+    #   rastgele sıralı) örneklerini zaman serisiymiş gibi dilimliyordu —
+    #   pencereler farklı makinelerin okumalarını bile karıştırıyordu.
+    #   Böyle eğitilen model trend öğrenemez, ortalamayı söyler.
+    #   Yeni hali: generate_historical ile GERÇEK ZAMAN SIRALI 24 saatlik
+    #   akış üretilir; pencereler her makinenin KENDİ zaman çizgisinde
+    #   dilimlenir (makine sınırı asla aşılmaz). Model artık "bu 20 okumalık
+    #   filmden sonraki kare ne olur?" sorusunu gerçekten öğreniyor.
 
-    from data.simulator import generate_training_data
-    # 3000 örnek, simülatörden
-    df = generate_training_data(n_samples=3000)
+    from data.simulator import generate_historical
+    df = generate_historical(hours=24, interval_seconds=30)   # makine başına 2880 sıralı okuma
 
     features = ["temperature", "vibration", "pressure", "current", "speed"]
 
     scaler = StandardScaler()
-    data_scaled = scaler.fit_transform(df[features].values)
-
+    scaler.fit(df[features].values)
     with open(LSTM_SCALER_PATH, "wb") as f:
         pickle.dump(scaler, f)
     print(f"  LSTM scaler kaydedildi: {LSTM_SCALER_PATH}")
 
-    X_all, y_all = _make_sequences(data_scaled)
-    print(f"  Dizi sayısı: {len(X_all)}")
+    # Pencereleri makine bazında, zaman sırasına göre dilimle
+    X_parts, y_parts = [], []
+    for eq_id, grp in df.sort_values("time").groupby("equipment_id"):
+        seq_scaled = scaler.transform(grp[features].values)
+        X_eq, y_eq = _make_sequences(seq_scaled)
+        if len(X_eq):
+            X_parts.append(X_eq); y_parts.append(y_eq)
+    X_all = np.concatenate(X_parts)
+    y_all = np.concatenate(y_parts)
+    print(f"  Dizi sayısı: {len(X_all)} (makine sınırı aşılmadan)")
 
     # CPU kullan (MPS için bellek taşması önlenir)
     device = torch.device("cpu")
