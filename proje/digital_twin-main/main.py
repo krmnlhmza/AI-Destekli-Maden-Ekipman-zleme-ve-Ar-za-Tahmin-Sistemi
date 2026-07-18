@@ -54,117 +54,17 @@ async def _live_stream():
         client.disconnect()
 
 
-async def _setup_n8n():
-    """n8n'de anomali alarm workflow'unu otomatik oluşturur."""
-    import urllib.request, json, base64, time
-    await asyncio.sleep(5)
-
-    # ÇankaYazılım - Anomali Bildirim Akışı
-    # Webhook → Filter → 4 paralel kanal: Log + PDF Trigger + Slack + Email
-    # (Slack/Email node'ları kullanıcı kendi credentials'ını verince aktifleşir)
-    workflow = {
-        "name": "Anomali Alarm",
-        "active": True,
-        "nodes": [
-            # 1) Webhook girişi — backend tarafı anomalide buraya POST atar
-            {
-                "id": "1", "name": "Anomali Webhook",
-                "type": "n8n-nodes-base.webhook",
-                "typeVersion": 2, "position": [200, 300],
-                "parameters": {
-                    "path": "anomali-alarm",
-                    "responseMode": "onReceived",
-                    "httpMethod": "POST",
-                }
-            },
-            # 2) Filtre — sadece skor >= 0.7 olan kritik anomaliler bildirim alır
-            {
-                "id": "2", "name": "Kritik Filtre",
-                "type": "n8n-nodes-base.if",
-                "typeVersion": 2, "position": [420, 300],
-                "parameters": {
-                    "conditions": {"conditions": [{
-                        "leftValue": "={{ $json.anomaly_score }}",
-                        "rightValue": 0.7,
-                        "operator": {"type": "number", "operation": "gte"},
-                    }]}
-                }
-            },
-            # 3a) Log — her kritik anomali için sistem log'una yaz
-            {
-                "id": "3", "name": "Sistem Log",
-                "type": "n8n-nodes-base.set",
-                "typeVersion": 3, "position": [680, 160],
-                "parameters": {
-                    "mode": "manual",
-                    "assignments": {"assignments": [
-                        {"id": "1", "name": "log_mesaji", "type": "string",
-                         "value": "={{ '[KRITIK] ' + $json.equipment_id + ' | skor=' + $json.anomaly_score + ' | ' + $json.description }}"},
-                    ]}
-                }
-            },
-            # 3b) PDF Rapor Tetikleyici — backend'ten rapor oluşturmasını ister
-            {
-                "id": "4", "name": "PDF Rapor Uret",
-                "type": "n8n-nodes-base.httpRequest",
-                "typeVersion": 4, "position": [680, 280],
-                "parameters": {
-                    "url": "http://host.docker.internal:8000/reports/pdf?saat=1",
-                    "method": "GET",
-                    "options": {"response": {"response": {"responseFormat": "file"}}},
-                }
-            },
-            # 3c) Slack Bildirimi — kullanıcı Slack webhook URL'ini ayarlamalı
-            {
-                "id": "5", "name": "Slack Bildirim (KONF GEREK)",
-                "type": "n8n-nodes-base.slack",
-                "typeVersion": 2, "position": [680, 400],
-                "disabled": True,   # credentials yokken pasif
-                "parameters": {
-                    "channel": "#bakim-alarm",
-                    "text": "={{ '🚨 *Maden Ekipman Alarmı*\\nEkipman: ' + $json.equipment_id + '\\nSkor: ' + $json.anomaly_score + '\\n' + $json.description }}",
-                }
-            },
-            # 3d) E-posta Bildirimi — kullanıcı SMTP/Gmail credentials ayarlamalı
-            {
-                "id": "6", "name": "E-posta Bildirim (KONF GEREK)",
-                "type": "n8n-nodes-base.emailSend",
-                "typeVersion": 2.1, "position": [680, 520],
-                "disabled": True,
-                "parameters": {
-                    "fromEmail": "alarm@cankayazilim.tr",
-                    "toEmail":   "bakim@madenisletmesi.tr",
-                    "subject":   "=[KRITIK] {{ $json.equipment_id }} - Anomali",
-                    "text":      "={{ 'Ekipman ID: ' + $json.equipment_id + '\\n\\nAnomali Skoru: ' + $json.anomaly_score + '\\n\\nAciklama:\\n' + $json.description + '\\n\\nDetayli rapor: http://localhost:8000/reports/pdf' }}",
-                }
-            },
-        ],
-        # Webhook → Filter → 4 paralel çıkış (Log + PDF + Slack + Email)
-        "connections": {
-            "Anomali Webhook": {"main": [[{"node": "Kritik Filtre", "type": "main", "index": 0}]]},
-            "Kritik Filtre":   {"main": [[
-                {"node": "Sistem Log",                  "type": "main", "index": 0},
-                {"node": "PDF Rapor Uret",              "type": "main", "index": 0},
-                {"node": "Slack Bildirim (KONF GEREK)", "type": "main", "index": 0},
-                {"node": "E-posta Bildirim (KONF GEREK)","type": "main", "index": 0},
-            ]]},
-        },
-    }
-
-    try:
-        cred = base64.b64encode(b"admin:admin123").decode()
-        req  = urllib.request.Request(
-            "http://localhost:5678/api/v1/workflows",
-            data=json.dumps(workflow).encode(),
-            headers={"Content-Type": "application/json", "Authorization": f"Basic {cred}",
-                     "X-N8N-API-KEY": ""},
-            method="POST",
-        )
-        urllib.request.urlopen(req, timeout=5)
-        print("n8n workflow oluşturuldu.")
-    except Exception:
-        pass
-
+# ── n8n workflow kurulumu (Adım 7 notu) ─────────────────────────────
+# Eskiden burada, açılışta n8n REST API'sine workflow yükleyen ~100 satırlık
+# bir fonksiyon vardı (_setup_n8n). Yeni n8n sürümleri bu eski basic-auth
+# API'yi kabul etmediği için her açılışta SESSİZCE başarısız oluyordu (ölü kod).
+# Workflow artık kalıcı olarak n8n'in kendi veritabanında kuruludur.
+# Yeniden kurmak gerekirse (ör. n8n volume silinirse):
+#   docker cp n8n_workflows/anomali_alarm.json n8n:/tmp/wf.json
+#   docker exec n8n n8n import:workflow --input=/tmp/wf.json
+#   docker exec n8n n8n update:workflow --id=AnomaliAlarm2026 --active=true
+#   docker restart n8n
+# ─────────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

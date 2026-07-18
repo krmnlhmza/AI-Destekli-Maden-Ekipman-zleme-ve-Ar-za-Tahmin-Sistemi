@@ -15,7 +15,8 @@
         "path": "anomali-alarm",
         "responseMode": "onReceived",
         "httpMethod": "POST"
-      }
+      },
+      "webhookId": "a1b2c3d4-anomali-alarm"
     },
     {
       "id": "2",
@@ -156,5 +157,6 @@
         ]
       ]
     }
-  }
+  },
+  "id": "AnomaliAlarm2026"
 }

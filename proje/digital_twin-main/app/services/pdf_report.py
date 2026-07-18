@@ -26,25 +26,35 @@ COLOR_MUTE    = (100, 116, 139)
 
 
 class _Report(FPDF):
+    """A4 rapor şablonu. (Adım 7) Helvetica yerine DejaVu kullanılır:
+    Helvetica gömülü Türkçe karakter içermez, "KRİTİK" → "KR?T?K" oluyordu.
+    DejaVu özgür lisanslı bir Unicode fonttur; fonts/ klasöründen gömülür,
+    böylece PDF her bilgisayarda (Docker dahil) aynı görünür."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.add_font("DejaVu", "",  "fonts/DejaVuSans.ttf")
+        self.add_font("DejaVu", "B", "fonts/DejaVuSans-Bold.ttf")
+
     def header(self):
         self.set_fill_color(*COLOR_HEADER)
         self.rect(0, 0, 210, 22, "F")
         self.set_text_color(255, 255, 255)
-        self.set_font("Helvetica", "B", 14)
+        self.set_font("DejaVu", "B", 14)
         self.set_xy(10, 6)
-        self.cell(0, 6, "Maden Dijital Ikiz - Anomali Raporu", align="L")
-        self.set_font("Helvetica", "", 8)
+        self.cell(0, 6, "Maden Dijital İkiz — Anomali Raporu", align="L")
+        self.set_font("DejaVu", "", 8)
         self.set_xy(10, 13)
-        self.cell(0, 5, "CankaYazilim | TEKNOFEST 2026 Maden Teknolojileri",
+        self.cell(0, 5, "ÇankaYazılım | TEKNOFEST 2026 Maden Teknolojileri",
                   align="L")
         self.set_text_color(*COLOR_TEXT)
         self.ln(18)
 
     def footer(self):
         self.set_y(-14)
-        self.set_font("Helvetica", "", 7)
+        self.set_font("DejaVu", "", 7)
         self.set_text_color(*COLOR_MUTE)
-        self.cell(0, 5, f"Otomatik uretildi: {datetime.now().strftime('%d.%m.%Y %H:%M')}",
+        self.cell(0, 5, f"Otomatik üretildi: {datetime.now().strftime('%d.%m.%Y %H:%M')}",
                   align="L")
         self.cell(0, 5, f"Sayfa {self.page_no()}", align="R")
 
@@ -61,15 +71,15 @@ def build_anomaly_report(rows: List[Dict], summary: Dict, hours: int) -> bytes:
     pdf.add_page()
 
     # ── ÖZET KUTUSU ──────────────────────────────────────
-    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_font("DejaVu", "B", 11)
     pdf.set_text_color(*COLOR_HEADER)
-    pdf.cell(0, 7, f"Sistem Ozeti (son {hours} saat)", ln=1)
+    pdf.cell(0, 7, f"Sistem Özeti (son {hours} saat)", ln=1)
     pdf.set_draw_color(*COLOR_ACCENT)
     pdf.set_line_width(0.4)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(4)
 
-    pdf.set_font("Helvetica", "", 10)
+    pdf.set_font("DejaVu", "", 10)
     pdf.set_text_color(*COLOR_TEXT)
     box_w = 60
     box_h = 18
@@ -84,41 +94,41 @@ def build_anomaly_report(rows: List[Dict], summary: Dict, hours: int) -> bytes:
         pdf.set_draw_color(220, 226, 235)
         pdf.rect(x, y0, box_w, box_h, "DF")
         pdf.set_xy(x + 3, y0 + 3)
-        pdf.set_font("Helvetica", "", 8)
+        pdf.set_font("DejaVu", "", 8)
         pdf.set_text_color(*COLOR_MUTE)
         pdf.cell(box_w - 6, 4, label.upper())
         pdf.set_xy(x + 3, y0 + 8)
-        pdf.set_font("Helvetica", "B", 15)
+        pdf.set_font("DejaVu", "B", 15)
         pdf.set_text_color(*color)
         pdf.cell(box_w - 6, 8, str(value))
     pdf.set_y(y0 + box_h + 8)
     pdf.set_text_color(*COLOR_TEXT)
 
     # ── ANOMALİ TABLOSU ──────────────────────────────────
-    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_font("DejaVu", "B", 11)
     pdf.set_text_color(*COLOR_HEADER)
-    pdf.cell(0, 7, f"Anomali Detaylari ({len(rows)} kayit)", ln=1)
+    pdf.cell(0, 7, f"Anomali Detayları ({len(rows)} kayıt)", ln=1)
     pdf.set_draw_color(*COLOR_ACCENT)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(3)
 
     if not rows:
-        pdf.set_font("Helvetica", "I", 10)
+        pdf.set_font("DejaVu", "", 10)
         pdf.set_text_color(*COLOR_MUTE)
-        pdf.cell(0, 8, "Bu aralikta anomali kaydi bulunmuyor. Sistem normal.", ln=1)
+        pdf.cell(0, 8, "Bu aralıkta anomali kaydı bulunmuyor. Sistem normal.", ln=1)
     else:
         # Başlık satırı
         pdf.set_fill_color(*COLOR_HEADER)
         pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_font("DejaVu", "B", 9)
         widths = [26, 30, 16, 16, 102]   # zaman, ekipman, skor, durum, açıklama
-        headers = ["Zaman", "Ekipman", "Skor", "Durum", "Aciklama"]
+        headers = ["Zaman", "Ekipman", "Skor", "Durum", "Açıklama"]
         for w, h in zip(widths, headers):
             pdf.cell(w, 8, h, fill=True, align="L")
         pdf.ln()
 
         # Veri satırları
-        pdf.set_font("Helvetica", "", 8)
+        pdf.set_font("DejaVu", "", 8)
         for i, row in enumerate(rows):
             fill = (i % 2 == 0)
             if fill:
@@ -135,10 +145,9 @@ def build_anomaly_report(rows: List[Dict], summary: Dict, hours: int) -> bytes:
 
             score = float(row.get("anomaly_score", 0))
             score_str = f"{score:.2f}"
-            status = "COZULDU" if row.get("resolved") else "ACIK"
+            status = "ÇÖZÜLDÜ" if row.get("resolved") else "AÇIK"
             desc = (row.get("description") or "").replace("\n", " ").strip()
-            # ASCII'ye zorla (Helvetica unicode desteklemez)
-            desc = desc.encode("ascii", "replace").decode("ascii")
+            # (Adım 7) ASCII zorlaması kaldırıldı — DejaVu Türkçe'yi destekler
             if len(desc) > 95:
                 desc = desc[:92] + "..."
 
@@ -147,7 +156,7 @@ def build_anomaly_report(rows: List[Dict], summary: Dict, hours: int) -> bytes:
                 (widths[0], ts_str, None),
                 (widths[1], row.get("equipment_id", ""), None),
                 (widths[2], score_str, COLOR_CRIT if score >= 0.8 else None),
-                (widths[3], status, COLOR_MUTE if status == "COZULDU" else (245, 158, 11)),
+                (widths[3], status, COLOR_MUTE if status == "ÇÖZÜLDÜ" else (245, 158, 11)),
                 (widths[4], desc, None),
             ]
             for w, text, color in row_cells:
@@ -160,13 +169,13 @@ def build_anomaly_report(rows: List[Dict], summary: Dict, hours: int) -> bytes:
 
     # ── ALT BİLGİ ────────────────────────────────────────
     pdf.ln(6)
-    pdf.set_font("Helvetica", "I", 8)
+    pdf.set_font("DejaVu", "", 8)
     pdf.set_text_color(*COLOR_MUTE)
     pdf.multi_cell(0, 4,
-        "Bu rapor, Isolation Forest tabanli anomali tespiti ve LSTM tabanli "
-        "kalan omur tahmini sisteminden otomatik uretilmistir. Sandvik LH517i "
-        "ve TH551i ekipmanlarinin canli sensor verisi degerlendirilmistir. "
-        "Detayli incelemeler icin /docs API arayuzunu kullanin.")
+        "Bu rapor, Isolation Forest tabanlı anomali tespiti ve LSTM tabanlı "
+        "kalan ömür tahmini sisteminden otomatik üretilmiştir. Sandvik LH517i "
+        "ve TH551i ekipmanlarının canlı sensör verisi değerlendirilmiştir. "
+        "Detaylı incelemeler için /docs API arayüzünü kullanın.")
 
     # bytes olarak döndür (StreamingResponse için)
     return bytes(pdf.output(dest="S"))
