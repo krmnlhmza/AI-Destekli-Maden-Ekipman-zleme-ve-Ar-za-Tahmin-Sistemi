@@ -168,7 +168,42 @@ PHASE_PROFILES: Dict[str, dict] = {
     "arriving_dump":      {"load": 1.0, "throttle": 0.30, "vibration_mult": 0.7,  "speed_mult": 0.5},
     "descending_empty":   {"load": 0.0, "throttle": 0.30, "vibration_mult": 0.5,  "speed_mult": 0.85, "cooling": True},
     "accelerating_empty": {"load": 0.0, "throttle": 0.80, "vibration_mult": 0.7,  "speed_mult": 0.9},
+    # (Senaryo 1) Manuel koşul — döngüde YOK: kötü/taşlık zeminde yüklü ilerleme.
+    # Fizik: bozuk zemin → yüksek titreşim; araç zorlanır → yüksek gaz/devir/yakıt
+    # ve sıcaklık; ama düşük hız. Bu bir NORMAL çalışma koşuludur (arıza değil),
+    # bu yüzden IF eğitimine dahil edilir — aksi halde IF bunu anomali sanır.
+    "kotu_yol":           {"load": 0.8, "throttle": 0.95, "vibration_mult": 1.9,  "speed_mult": 0.25},
 }
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# (Senaryo 1) MANUEL SEÇİLEBİLİR FİZİKSEL KOŞULLAR
+# ─────────────────────────────────────────────────────────────────────────
+# Kullanıcı Detay'dan bir koşul seçer; makine o koşulda SABİT kalır (döngü
+# ilerlemez). Her koşul bir PHASE_PROFILES girdisine bağlanır. Liste araç
+# TİPİNE göre değişir (yükleyici vs kamyon). "auto" = operasyon döngüsü.
+# Bu tek kaynak hem UI hem de IF eğitimi tarafından kullanılır.
+MANUAL_SCENARIOS: Dict[str, List[Tuple[str, str]]] = {
+    "loader": [
+        ("idle",            "Rölanti — bekleme"),
+        ("returning_empty", "Boş — düz yol (hızlı)"),
+        ("picking_up",      "Kepçe doldurma (hidrolik yük)"),
+        ("hauling_loaded",  "Yüklü — taşıma"),
+        ("kotu_yol",        "Kötü / taşlık yol — yüklü"),
+    ],
+    "truck": [
+        ("idle_waiting",        "Rölanti — bekleme"),
+        ("descending_empty",    "Boş — yokuş aşağı (serin, hızlı)"),
+        ("accelerating_loaded", "Yüklü — düz yol"),
+        ("climbing_loaded",     "Yüklü — yokuş yukarı (max stres)"),
+        ("kotu_yol",            "Kötü / taşlık yol — yüklü"),
+    ],
+}
+
+
+def manual_scenarios_for(eq_type: str) -> List[Tuple[str, str]]:
+    """Araç tipine göre manuel seçilebilir fiziksel koşul listesi."""
+    return MANUAL_SCENARIOS.get(eq_type, MANUAL_SCENARIOS["loader"])
 
 
 @dataclass
@@ -333,13 +368,38 @@ def _compute_reading(equipment_id: str, state: EquipmentRuntimeState) -> dict:
         _crit = {k: profile[k][1] * m for k, m in
                  (("temperature", 1.45), ("vibration", 2.8),
                   ("current", 1.6), ("pressure", 1.7))}
-        if state.forced_fault == "overheat":
-            t = max(t, _crit["temperature"] * np.random.uniform(0.90, 1.08))
-        elif state.forced_fault == "vibration_spike":
-            v = max(v, _crit["vibration"] * np.random.uniform(0.90, 1.10))
-        elif state.forced_fault == "overcurrent":
+        hi_t = profile["temperature"][1]
+        ff = state.forced_fault
+        # ── (Senaryo 2) Çok-sensörlü, gerçekçi arıza imzaları ──
+        # Her imza IF'in gördüğü 5 sensörden (sıcaklık, titreşim, basınç, akım,
+        # hız) en az birinde belirgin sapar → tespit garanti. Yakıt/tork/devir
+        # de fizik gereği birlikte hareket eder (arayüzde görünür).
+        if ff in ("yag_pompasi", "pump"):
+            # Yağ/hidrolik pompa arızası: pompa basıncı tutamaz → BASINÇ DÜŞER;
+            # yağ dolaşımı azalır → yağ ısısı hafif düşer; mekanik zorlanma →
+            # titreşim artar; motor telafi için daha çok yakar.
+            p = min(p, p_lo * np.random.uniform(0.42, 0.55))
+            v = max(v, _crit["vibration"] * np.random.uniform(0.72, 0.92))
+            t = t - t_range * np.random.uniform(0.15, 0.30)
+            yakit *= np.random.uniform(1.12, 1.22)
+        elif ff in ("rulman", "vibration_spike"):
+            # Rulman aşınması: sürtünme → yüksek titreşim + ısı hafif yükselir.
+            v = max(v, _crit["vibration"] * np.random.uniform(0.95, 1.15))
+            t = max(t, hi_t * np.random.uniform(1.02, 1.08))
+        elif ff == "overheat":
+            # Motor aşırı ısınma: ısı kritik + ısınan motor daha çok akım çeker.
+            t = max(t, _crit["temperature"] * np.random.uniform(0.95, 1.10))
+            c = max(c, profile["current"][1] * np.random.uniform(1.05, 1.20))
+        elif ff in ("enjektor", "injector"):
+            # Enjektör/yanma arızası: düzensiz yanma (misfire) → titreşim artar,
+            # tork düşer, motor telafi için daha çok yakar, egzoz ısısı hafif artar.
+            v = max(v, _crit["vibration"] * np.random.uniform(0.70, 0.90))
+            yakit *= np.random.uniform(1.20, 1.35)
+            tork *= np.random.uniform(0.60, 0.75)
+            t = max(t, hi_t * np.random.uniform(1.02, 1.06))
+        elif ff == "overcurrent":
             c = max(c, _crit["current"] * np.random.uniform(0.90, 1.08))
-        elif state.forced_fault == "pressure_surge":
+        elif ff == "pressure_surge":
             p = max(p, _crit["pressure"] * np.random.uniform(0.92, 1.08))
     if state.forced_fault:
         state.fault_readings_left -= 1
@@ -396,9 +456,11 @@ def generate_reading(equipment_id: str, force_anomaly: bool = False,
     if force_anomaly:
         # (Senaryo 2) fault_type verilirse O arıza enjekte edilir; yoksa rastgele
         state.forced_fault = fault_type or np.random.choice(
-            ["overheat", "vibration_spike", "overcurrent", "pressure_surge"]
+            ["yag_pompasi", "rulman", "overheat", "enjektor"]
         )
-        state.fault_readings_left = int(np.random.randint(6, 10))   # ~1-1.5 dk
+        # 3s yayında ~10-14 okuma = ~30-42 sn: jüri arıza → tespit → LSTM → RAG
+        # zincirini rahat izler; 3/5 teyit için fazlasıyla yeterli.
+        state.fault_readings_left = int(np.random.randint(10, 15))
 
     reading = _compute_reading(equipment_id, state)
 
@@ -456,8 +518,24 @@ def generate_training_data(n_samples: int = 2000) -> pd.DataFrame:
         eq_id = np.random.choice(eq_ids)
         # Sadece o ekipmanın tipine uygun fazlardan seç
         eq_type = EQUIPMENT_PROFILES[eq_id]["type"]
-        valid_phases = [p for p, _ in _cycle_for(eq_type)]
-        phase = np.random.choice(valid_phases)
+        # Döngü fazları + manuel seçilebilir koşullar (kotu_yol dahil) — hepsi
+        # NORMAL çalışma sayılır, IF bunları anomali olarak işaretlememeli.
+        valid_phases = list(dict.fromkeys(
+            [p for p, _ in _cycle_for(eq_type)]
+            + [p for p, _ in manual_scenarios_for(eq_type)]
+        ))
+        # "Hafif" fazlar (rölanti, boş dönüş, yokuş aşağı boş inme) normal
+        # uzayın uç köşeleridir: hız/yük düşük, soğumada sıcaklık da düşer.
+        # Eşit örneklenirse seyrek kalır ve IF onları yanlışlıkla anomali sanar
+        # (idle %20, iniş %25 sahte alarm). Gerçek operasyonda makine bu
+        # durumlarda çok zaman geçirir → eğitimde bol olmalı. 3x ağırlık:
+        # IF bu köşeleri yoğun/normal öğrenir, sahte alarm hedefi <%2.
+        # Ayrıca "dumping" hidrolik basıncı ani spike yapan geçici bir köşedir;
+        # o da seyrek kalırsa sahte alarm üretir → aynı gerekçeyle yoğunlaştırılır.
+        BOOST = ("idle", "idle_waiting", "returning_empty",
+                 "descending_empty", "accelerating_empty", "dumping")
+        w = np.array([3.0 if p in BOOST else 1.0 for p in valid_phases])
+        phase = np.random.choice(valid_phases, p=w / w.sum())
         wear  = float(np.random.uniform(0.05, 0.5))
         is_anomaly = np.random.random() < 0.05
         if is_anomaly:
@@ -594,7 +672,12 @@ def generate_healthy_run(equipment_id: str, steps: int = None) -> pd.DataFrame:
     """Sağlıklı run — tüm pencereler max RUL ile etiketlenir."""
     profile = EQUIPMENT_PROFILES[equipment_id]
     if steps is None: steps = int(np.random.randint(40, 80))
-    valid_phases = [p for p, _ in _cycle_for(profile["type"])]
+    # Sağlıklı taban: döngü fazları + manuel koşullar (kotu_yol dahil) → RUL
+    # modeli bu koşulları da "sağlıklı" normalde görsün.
+    valid_phases = list(dict.fromkeys(
+        [p for p, _ in _cycle_for(profile["type"])]
+        + [p for p, _ in manual_scenarios_for(profile["type"])]
+    ))
     rows = []
     for _ in range(steps):
         r = _stateless_reading_for_phase(

@@ -67,6 +67,10 @@ def _calibrate(raw_normal, raw_anom) -> dict:
     # normalin %99 çapasının ÜSTÜNE itiyoruz — böylece "normalin %99'u
     # 0.5'in altında kalır" garantisi (yanlış alarm ≤ ~%1) asla bozulmaz.
     x1 = float(np.median(x_norm))
+    # Normalin %99'luk ucu → 0.50. Köşe fazlar (rölanti/soğuma/boşaltma)
+    # simülatörde 3x yoğun örneklendiği için bu çapa artık onları 0.6 üstüne
+    # itmiyor; kalibrasyonu daha fazla sıkmaya gerek yok (sıkmak arıza recall'ını
+    # bozuyordu). Yanlış alarm ölçümü hold-out normalde ~%1 kalır.
     x2 = float(np.quantile(x_norm, 0.99))
     x3 = max(float(np.median(x_anom)),      x2 + 1e-9)
     x4 = max(float(np.quantile(x_anom, 0.95)), x3 + 1e-9)
@@ -143,7 +147,9 @@ def train_isolation_forest():
     from data.simulator import EQUIPMENT_PROFILES, generate_training_data
     print(f"  Kaggle arıza oranı (eğitimdeki anomali payı): %{_kaggle_failure_rate()*100:.1f}")
 
-    df_pool = generate_training_data(n_samples=9000)   # tüm ekipmanlar tek havuz
+    np.random.seed(42)   # veri üretimi deterministik → retrain'ler kararlı,
+    #                      demo modeli seed şansına bağlı kalmaz
+    df_pool = generate_training_data(n_samples=12000)  # tüm ekipmanlar tek havuz
     for eq_id in EQUIPMENT_PROFILES:
         b = train_one_equipment(eq_id, df_pool=df_pool)
         k = b["kabul"]

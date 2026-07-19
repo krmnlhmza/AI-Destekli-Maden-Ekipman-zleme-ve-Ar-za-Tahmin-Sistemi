@@ -2,6 +2,7 @@ import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from contextlib import asynccontextmanager
 
 from app.database import init_db
@@ -22,7 +23,8 @@ _stream_task  = None
 async def _live_stream():
     """
     Saha sensörlerini taklit eden MQTT yayıncısı.
-    Her 8 saniyede tüm ekipmanlar için okuma üretir ve MQTT broker'a yayınlar.
+    Her 3 saniyede tüm ekipmanlar için okuma üretir ve MQTT broker'a yayınlar.
+    (Demo akıcılığı için 3 sn: grafikler daha sık nokta alır, veri "canlı" akar.)
     Veriyi tüketip işleyen taraf app.services.mqtt_subscriber'dır.
     Akış:  simülatör → MQTT (maden/{eq}/sensor) → subscriber → DB/Redis/n8n/Qdrant
     """
@@ -39,7 +41,7 @@ async def _live_stream():
     # Canlı Test senaryolarıyla (manuel) tetiklenir — demo tamamen kontrollü.
     try:
         while True:
-            await asyncio.sleep(8)
+            await asyncio.sleep(3)
             for eq_id in EQUIPMENT_IDS:
                 publish_reading(client, eq_id)
     except asyncio.CancelledError:
@@ -111,12 +113,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 async def root():
-    return {
-        "proje":         "Maden Dijital İkiz",
-        "versiyon":      "1.0.0",
-        "durum":         "çalışıyor",
-        "dokümantasyon": "/docs",
-    }
+    return RedirectResponse(url="/static/demo.html")
 
 
 @app.get("/health")

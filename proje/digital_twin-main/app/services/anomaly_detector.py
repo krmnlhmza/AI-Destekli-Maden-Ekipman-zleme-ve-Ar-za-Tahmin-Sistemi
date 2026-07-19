@@ -38,20 +38,22 @@ FEATURES = ["temperature", "vibration", "pressure", "current", "speed"]
 # {ekipman_id: {"model": IsolationForest, "scaler": StandardScaler, "calib": {...}}}
 _bundles: Dict[str, dict] = {}
 
-# ── 2/3 TEYİT KURALI (kararlılık) ─────────────────────────────────
-# Kalibre modelin ~%1 tekil yanlış alarmı, 8 sn'lik akışta birkaç dakikada
-# bir sahte uyarı üretiyordu. Kural: son 3 okumanın EN AZ 2'si uyarı eşiğini
-# aşmadan anomali İLAN EDİLMEZ. Tekil sıçramalar elenir; gerçek arızalar
-# 6-9 okuma sürdüğünden teyit 8-16 sn içinde gelir. Operasyonel karşılığı:
-# "sistem tek okumayla panik yapmaz, teyit eder."
+# ── 3/5 TEYİT KURALI (kararlılık) ─────────────────────────────────
+# Kalibre modelin tekil yanlış alarmı, sürekli aynı fiziksel koşulda bekleyen
+# bir makinede (örn. manuel seçilen "boş iniş", ~%5 tekil sapma) yeterince
+# elenmiyordu. Kural: son 5 okumanın EN AZ 3'ü uyarı eşiğini aşmadan anomali
+# İLAN EDİLMEZ. Sporadik sıçramalar (koşul köşelerindeki seyrek yüksek skorlar)
+# pratikte tamamen elenir; gerçek arızalar 6-10 okuma sürdüğünden 3/5 teyit
+# hâlâ birkaç okumada gelir. Operasyonel karşılığı: "sistem tek/çift okumayla
+# panik yapmaz, kalıcı örüntüyü teyit eder."
 from collections import deque as _deque
 _son_skorlar: Dict[str, "_deque"] = {}
 
 
 def _teyitli_karar(eq_id: str, score: float) -> bool:
-    d = _son_skorlar.setdefault(eq_id, _deque(maxlen=3))
+    d = _son_skorlar.setdefault(eq_id, _deque(maxlen=5))
     d.append(score)
-    return score >= UYARI_ESIGI and sum(1 for x in d if x >= UYARI_ESIGI) >= 2
+    return score >= UYARI_ESIGI and sum(1 for x in d if x >= UYARI_ESIGI) >= 3
 
 
 def _load_bundle(equipment_id: str) -> dict:

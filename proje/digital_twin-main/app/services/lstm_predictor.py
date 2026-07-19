@@ -108,7 +108,8 @@ def _dominant_sensor(last_reading: dict, equipment_id: str):
     crit    = critical_thresholds(equipment_id)
     profile = EQUIPMENT_PROFILES[equipment_id]
     labels  = {"temperature": "Sıcaklık", "vibration": "Titreşim",
-               "current": "Akım", "pressure": "Basınç"}
+               "current": "Akım", "pressure": "Basınç",
+               "pressure_low": "Basınç (düşük)"}
     worst, worst_ratio = None, -1.0
     for key in ["temperature", "vibration", "current"]:
         hi = profile[key][1]
@@ -116,6 +117,14 @@ def _dominant_sensor(last_reading: dict, equipment_id: str):
         ratio = (val - hi) / (crit[key] - hi) if crit[key] > hi else 0.0
         if ratio > worst_ratio:
             worst, worst_ratio = key, ratio
+    # Basınç DÜŞÜŞÜ (yağ/hidrolik pompa arızası): normal alt sınırın altına
+    # inme oranı — p_lo'nun ~%45'ine inince oran ≈ 1.0 (kritik).
+    p_lo = profile["pressure"][0]
+    p_val = last_reading.get("pressure", p_lo)
+    if p_val < p_lo:
+        p_ratio = (p_lo - p_val) / (p_lo * 0.55)
+        if p_ratio > worst_ratio:
+            worst, worst_ratio = "pressure_low", p_ratio
     return labels.get(worst, worst), max(0.0, min(1.0, worst_ratio)), crit
 
 
@@ -137,13 +146,23 @@ def predict_rul(sequence: List[List[float]], equipment_id: str) -> dict:
     with torch.no_grad():
         norm = float(_rul_model(x).cpu().numpy()[0][0])
 
-    rul_hours = round(norm * RUL_MAX_HOURS, 1)
-    health    = round(min(100.0, norm * 100.0 / 0.6), 1)   # ~60h ve üzeri = tam sağlık
-    health    = min(100.0, health)
-
     keys = ["temperature", "vibration", "pressure", "current", "speed"]
     last = dict(zip(keys, sequence[-1]))
     sensor, ratio, crit = _dominant_sensor(last, equipment_id)
+
+    # (Senaryo 2) Eşik-farkındalıklı hibrit RUL. LSTM, ani enjekte edilen bir
+    # arızayı geçmiş "aşınma trendi" görmediği için hâlâ yüksek RUL verebilir;
+    # oysa bir sensör kritik eşiğe yaklaştıysa kalan ömür fiziksel olarak
+    # kısadır. Fizik-tabanlı tavanı (1 - kritiğe yakınlık) LSTM tahminiyle
+    # birleştirip KÜÇÜĞÜNÜ alıyoruz: sağlıklıda LSTM dürüst kalır (ratio≈0 →
+    # tavan≈1, etkisiz), arıza anında RUL düşerek "sistem arızayı önceden
+    # gördü" mesajını verir. Bu, IF/eşik sinyalini RUL'a taşıyan bir hibrittir.
+    fizik_norm = max(0.02, 1.0 - ratio)
+    norm = min(norm, fizik_norm)
+
+    rul_hours = round(norm * RUL_MAX_HOURS, 1)
+    health    = round(min(100.0, norm * 100.0 / 0.6), 1)   # ~60h ve üzeri = tam sağlık
+    health    = min(100.0, health)
 
     if rul_hours < 8:
         durum, renk = "KRİTİK", "kirmizi"

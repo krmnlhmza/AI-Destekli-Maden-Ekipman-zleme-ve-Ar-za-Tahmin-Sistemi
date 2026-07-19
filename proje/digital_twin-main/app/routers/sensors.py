@@ -155,28 +155,30 @@ FAZ_ETIKETLERI = {
 
 @router.get("/mode/{equipment_id}")
 async def get_modes(equipment_id: str):
-    """Araç için seçilebilir fiziksel koşullar + aktif mod."""
-    from data.simulator import EQUIPMENT_PROFILES, _cycle_for, _get_state
+    """Araç için seçilebilir fiziksel koşullar + aktif mod (Senaryo 1).
+    Liste araç tipine göre değişir; kaynak simulator.MANUAL_SCENARIOS."""
+    from data.simulator import EQUIPMENT_PROFILES, manual_scenarios_for, _get_state
     if equipment_id not in EQUIPMENT_PROFILES:
         return {"hata": "bilinmeyen araç"}
-    fazlar = [{"kod": f, "ad": FAZ_ETIKETLERI.get(f, f)}
-              for f, _ in _cycle_for(EQUIPMENT_PROFILES[equipment_id]["type"])]
+    eq_type = EQUIPMENT_PROFILES[equipment_id]["type"]
+    fazlar = [{"kod": kod, "ad": ad} for kod, ad in manual_scenarios_for(eq_type)]
     st = _get_state(equipment_id)
     return {"fazlar": fazlar, "aktif": st.manual_phase or "auto"}
 
 
 @router.post("/mode/{equipment_id}")
 async def set_mode(equipment_id: str, faz: str = Query(...)):
-    """(Senaryo 1) Fiziksel koşulu sabitle: faz=climbing_loaded | ... | auto"""
-    from data.simulator import EQUIPMENT_PROFILES, _cycle_for, set_manual_phase
+    """(Senaryo 1) Fiziksel koşulu sabitle: faz=kotu_yol | climbing_loaded | ... | auto"""
+    from data.simulator import EQUIPMENT_PROFILES, manual_scenarios_for, set_manual_phase
     if equipment_id not in EQUIPMENT_PROFILES:
         return {"hata": "bilinmeyen araç"}
-    gecerli = [f for f, _ in _cycle_for(EQUIPMENT_PROFILES[equipment_id]["type"])]
-    if faz != "auto" and faz not in gecerli:
-        return {"hata": f"geçersiz faz: {faz}"}
+    eq_type = EQUIPMENT_PROFILES[equipment_id]["type"]
+    etiketler = dict(manual_scenarios_for(eq_type))
+    if faz != "auto" and faz not in etiketler:
+        return {"hata": f"geçersiz koşul: {faz}"}
     set_manual_phase(equipment_id, faz)
     return {"equipment_id": equipment_id, "mod": faz,
-            "ad": "Otomatik döngü" if faz == "auto" else FAZ_ETIKETLERI.get(faz, faz)}
+            "ad": "Otomatik döngü" if faz == "auto" else etiketler.get(faz, faz)}
 
 
 @router.post("/simulate/{equipment_id}", response_model=SensorReadingOut)

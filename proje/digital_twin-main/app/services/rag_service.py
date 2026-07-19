@@ -116,6 +116,14 @@ KNOWLEDGE_BASE = [
         "part_numbers": ["56037200", "56037201", "56028042"],
         "failure_mode": "hidrolik basınç sapması",
     },
+    {
+        "id": "lh517-hydraulic-pump-01",
+        "category": "Hidrolik Sistem",
+        "title": "LH517 Yağ / Hidrolik Pompa Arızası",
+        "content": "LH517 hidrolik pompası sistem basıncını 250-280 bar aralığında tutar. Pompa aşınması veya iç kaçak oluştuğunda pompa basıncı tutamaz ve sistem basıncı hızla düşer (150 bar altı kritik). Belirtiler: hidrolik basınç düşük, basınç düşüyor, pompa arızası, yağ pompası bozuk, pompa basmıyor, kepçe kalkmıyor, güç kaybı, titreşim artışı, yağ sıcaklığı düşük (yağ dolaşımı azaldı), yakıt tüketimi arttı. Ayrıca aşınan pompa mekanik titreşim üretir ve motor telafi için daha çok yük çeker. Yağ/hidrolik pompa arızası tespit edildiğinde: 1) Sistem basıncını manometreyle ölçün, 2) Pompa giriş filtresini ve emiş hattını tıkanıklık için kontrol edin, 3) Pompa iç kaçağını (case drain debisi) ölçün, 4) Yağ seviyesini ve viskozitesini doğrulayın, 5) Aşınmışsa pompayı değiştirin. Hydraulic Pump (P/N 56028042), Suction Filter (P/N 56034120).",
+        "part_numbers": ["56028042", "56034120"],
+        "failure_mode": "pompa arızası, düşük basınç",
+    },
     # Elektrik Sistemi
     {
         "id": "lh517-electrical-01",
