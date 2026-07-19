@@ -25,6 +25,9 @@ class SensorReadingCreate(BaseModel):
     current: float
     speed: float
     gas: float = 0.0   # % CH4 (metan)
+    rpm: Optional[float] = None      # devir (d/dk)
+    torque: Optional[float] = None   # tork (Nm)
+    fuel: Optional[float] = None     # yakıt tüketimi (L/sa)
 
 
 class SensorReadingOut(SensorReadingCreate):

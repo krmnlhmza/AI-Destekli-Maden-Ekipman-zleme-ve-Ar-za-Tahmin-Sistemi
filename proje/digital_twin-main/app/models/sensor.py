@@ -25,7 +25,10 @@ class SensorReading(Base):
     pressure = Column(Float)
     current = Column(Float)
     speed = Column(Float)
-    gas = Column(Float, default=0.0)  # % CH4 (metan) — İSG
+    gas = Column(Float, default=0.0)   # % CH4 — kayıt sürer, alarm üretmez
+    rpm = Column(Float)                # devir (d/dk)
+    torque = Column(Float)             # tork (Nm)
+    fuel = Column(Float)               # yakıt tüketimi (L/sa)
     is_anomaly = Column(Boolean, default=False)
     anomaly_score = Column(Float, default=0.0)
 

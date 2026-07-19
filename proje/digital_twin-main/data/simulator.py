@@ -51,6 +51,9 @@ EQUIPMENT_PROFILES: Dict[str, dict] = {
         "current":     (150, 195),  # A — sürücü motor
         "speed":       (1.0, 7.0),  # km/h
         "gas":         (0.1, 0.6),  # % CH4
+        "rpm":         (800, 2100),   # devir — rölanti/max (Volvo TAD1342VE)
+        "torque":      (300, 2300),   # Nm — tepe tork
+        "fuel":        (8, 52),       # L/sa — rölanti/tam yük
     },
     "LH517i_002": {
         "type":  "loader",
@@ -62,6 +65,9 @@ EQUIPMENT_PROFILES: Dict[str, dict] = {
         "current":     (150, 195),
         "speed":       (1.0, 7.0),
         "gas":         (0.1, 0.6),
+        "rpm":         (800, 2100),
+        "torque":      (300, 2300),
+        "fuel":        (8, 52),
     },
     # ── Sandvik TH551i — Yer Altı Kamyon (411 kW, 51 ton kapasite)
     "TH551i_001": {
@@ -74,6 +80,9 @@ EQUIPMENT_PROFILES: Dict[str, dict] = {
         "current":     (180, 220),
         "speed":       (2.0, 30.0),
         "gas":         (0.1, 0.6),
+        "rpm":         (800, 2100),
+        "torque":      (400, 2600),   # 411 kW motor — daha yüksek tepe tork
+        "fuel":        (10, 62),
     },
 }
 
@@ -171,6 +180,9 @@ class EquipmentRuntimeState:
     wear_level:     float = 0.05     # 0.0 yeni → 1.0 arızalı
     last_update:    Optional[datetime] = None
     forced_fault:   Optional[str] = None    # enjekte edilen arıza tipi
+    manual_phase:   Optional[str] = None    # (Senaryo 1) elle sabitlenen faz —
+    # dolu ise döngü İLERLEMEZ, makine seçilen fiziksel koşulda kalır
+    # (örn. "yokuş yukarı yüklü"). None = otomatik operasyon döngüsü.
     fault_readings_left: int = 0     # arızanın süreceği kalan okuma sayısı
     # (Adım 4) Arıza artık tek okumada kaybolmuyor: gerçekte bir rulman
     # bir saniyeliğine bozulup düzelmez. Enjeksiyon 4-6 okuma sürer;
@@ -195,7 +207,12 @@ def _get_state(equipment_id: str) -> EquipmentRuntimeState:
 
 def _advance_state(state: EquipmentRuntimeState, eq_type: str,
                    dt_seconds: float) -> None:
-    """Durum makinesini dt_seconds kadar ilerlet."""
+    """Durum makinesini dt_seconds kadar ilerlet.
+    Manuel mod: faz sabit kalır (döngü ilerlemez), yıpranma/saat yine birikir."""
+    if state.manual_phase:
+        state.cycle_phase = state.manual_phase
+        state.runtime_hours += dt_seconds / 3600.0
+        return
     cycle = _cycle_for(eq_type)
     phases    = [p[0] for p in cycle]
     durations = [p[1] for p in cycle]
@@ -288,22 +305,42 @@ def _compute_reading(equipment_id: str, state: EquipmentRuntimeState) -> dict:
     s += np.random.normal(0, s_range * 0.05)
     s  = max(0.0, s)
 
+    # ── Devir / Tork / Yakıt (güç aktarma — fizik korelasyonlu) ──
+    # Devir gaz pedalını izler; tork yük+gazla; yakıt devir+yük+yıpranmayla
+    # birlikte artar. Yokuş senaryosunda: hız düşer, tork/devir/yakıt yükselir.
+    r_lo, r_hi = profile["rpm"]
+    rpm = r_lo + (r_hi - r_lo) * throttle + np.random.normal(0, (r_hi - r_lo) * 0.03)
+    tq_lo, tq_hi = profile["torque"]
+    tork = tq_lo + (tq_hi - tq_lo) * min(1.0, 0.55 * load + 0.45 * throttle) \
+           + np.random.normal(0, (tq_hi - tq_lo) * 0.03)
+    if cooling:
+        tork *= 0.35          # yokuş aşağı: motor freni, tork düşük
+    f_lo, f_hi = profile["fuel"]
+    yakit = f_lo + (f_hi - f_lo) * min(1.0, 0.55 * throttle + 0.35 * load + 0.15 * wear) \
+            + np.random.normal(0, (f_hi - f_lo) * 0.04)
+
     # ── Metan (ortam) ─────────────────────────────────────────
     # Mekanikten bağımsız, ortam fonu. force_gas dışarıdan setlenir.
     g_lo, g_hi = profile["gas"]
     g = max(0.0, np.random.normal((g_lo + g_hi) / 2, (g_hi - g_lo) / 4))
 
-    # ── Zorlanan arıza enjeksiyonu (force_anomaly tetikleyicisi) ───
-    # Arıza tipi state'te durduğu sürece her okumaya uygulanır;
-    # sayaç (fault_readings_left) sıfırlanınca arıza "giderilmiş" olur.
-    if state.forced_fault == "overheat":
-        t *= np.random.uniform(1.3, 1.55)
-    elif state.forced_fault == "vibration_spike":
-        v *= np.random.uniform(2.0, 3.0)
-    elif state.forced_fault == "overcurrent":
-        c *= np.random.uniform(1.4, 1.7)
-    elif state.forced_fault == "pressure_surge":
-        p *= np.random.uniform(1.4, 1.8)
+    # ── Zorlanan arıza enjeksiyonu (yalnız Canlı Test'ten gelir) ──
+    # Arıza şiddeti MUTLAKTIR: gerçek bir rulman arızası "rölantinin 2 katı"
+    # değil, kritik eşiğe vurmuş mutlak yüksek titreşim üretir. Çarpan yerine
+    # "kritik eşiğin %90-110'u" tabanı kullanılır — makine hangi fazda olursa
+    # olsun arıza belirgin görünür ve 2/3 teyit kuralından güvenilirce geçer.
+    if state.forced_fault:
+        _crit = {k: profile[k][1] * m for k, m in
+                 (("temperature", 1.45), ("vibration", 2.8),
+                  ("current", 1.6), ("pressure", 1.7))}
+        if state.forced_fault == "overheat":
+            t = max(t, _crit["temperature"] * np.random.uniform(0.90, 1.08))
+        elif state.forced_fault == "vibration_spike":
+            v = max(v, _crit["vibration"] * np.random.uniform(0.90, 1.10))
+        elif state.forced_fault == "overcurrent":
+            c = max(c, _crit["current"] * np.random.uniform(0.90, 1.08))
+        elif state.forced_fault == "pressure_surge":
+            p = max(p, _crit["pressure"] * np.random.uniform(0.92, 1.08))
     if state.forced_fault:
         state.fault_readings_left -= 1
         if state.fault_readings_left <= 0:
@@ -316,14 +353,23 @@ def _compute_reading(equipment_id: str, state: EquipmentRuntimeState) -> dict:
         "current":     round(float(c), 3),
         "speed":       round(float(s), 3),
         "gas":         round(float(g), 3),
+        "rpm":         round(float(max(0, rpm)), 1),
+        "torque":      round(float(max(0, tork)), 1),
+        "fuel":        round(float(max(0, yakit)), 2),
     }
 
 
 # ═════════════════════════════════════════════════════════════════════════
 # 5) DIŞA AÇIK API — Geriye dönük uyumlu fonksiyonlar
 # ═════════════════════════════════════════════════════════════════════════
+def set_manual_phase(equipment_id: str, phase) -> None:
+    """(Senaryo 1) Aracın fiziksel koşulunu elle sabitle; None/'auto' = döngüye dön."""
+    st = _get_state(equipment_id)
+    st.manual_phase = None if phase in (None, "auto") else phase
+
+
 def generate_reading(equipment_id: str, force_anomaly: bool = False,
-                     force_gas: bool = False) -> dict:
+                     force_gas: bool = False, fault_type: str = None) -> dict:
     """
     Canlı stream için: durum makinesini bir adım ilerletip korelasyonlu
     sensör okuması döner. force_anomaly=True ise sonraki okumaya rastgele
@@ -348,11 +394,11 @@ def generate_reading(equipment_id: str, force_anomaly: bool = False,
     _advance_state(state, profile["type"], dt)
 
     if force_anomaly:
-        # Rastgele bir arıza tipi seç ve 4-6 okuma boyunca sürdür (gerçekçilik)
-        state.forced_fault = np.random.choice(
+        # (Senaryo 2) fault_type verilirse O arıza enjekte edilir; yoksa rastgele
+        state.forced_fault = fault_type or np.random.choice(
             ["overheat", "vibration_spike", "overcurrent", "pressure_surge"]
         )
-        state.fault_readings_left = int(np.random.randint(4, 7))
+        state.fault_readings_left = int(np.random.randint(6, 10))   # ~1-1.5 dk
 
     reading = _compute_reading(equipment_id, state)
 

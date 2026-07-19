@@ -64,6 +64,9 @@ async def latest_all(db: AsyncSession = Depends(get_db)):
                 "pressure":      round(row.pressure, 2),
                 "current":       round(row.current, 2),
                 "speed":         round(row.speed, 2),
+                "rpm":           round(row.rpm, 1) if row.rpm is not None else None,
+                "torque":        round(row.torque, 1) if row.torque is not None else None,
+                "fuel":          round(row.fuel, 2) if row.fuel is not None else None,
                 "gas":           gas_val,
                 "gas_status":    gas_status(gas_val),
                 "is_anomaly":    row.is_anomaly,
@@ -81,7 +84,7 @@ async def timeseries(
     db: AsyncSession = Depends(get_db),
 ):
     """Grafik için zaman serisi verisi."""
-    allowed = {"temperature", "vibration", "pressure", "current", "speed", "gas", "anomaly_score"}
+    allowed = {"temperature", "vibration", "pressure", "current", "speed", "gas", "rpm", "torque", "fuel", "anomaly_score"}
     if metric not in allowed:
         return {"error": "Geçersiz metrik"}
 
@@ -93,7 +96,9 @@ async def timeseries(
         .order_by(SensorReading.time)
         .limit(200)
     )
-    data = rows.all()
+    # Yeni kolonların (rpm/tork/yakıt) eski kayıtları NULL'dur — atla,
+    # yoksa float(None) 500 hatası üretir
+    data = [r for r in rows.all() if r[1] is not None]
     return {
         "labels": [r[0].isoformat() for r in data],
         "values": [round(float(r[1]), 3) for r in data],

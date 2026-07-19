@@ -38,6 +38,21 @@ FEATURES = ["temperature", "vibration", "pressure", "current", "speed"]
 # {ekipman_id: {"model": IsolationForest, "scaler": StandardScaler, "calib": {...}}}
 _bundles: Dict[str, dict] = {}
 
+# ── 2/3 TEYİT KURALI (kararlılık) ─────────────────────────────────
+# Kalibre modelin ~%1 tekil yanlış alarmı, 8 sn'lik akışta birkaç dakikada
+# bir sahte uyarı üretiyordu. Kural: son 3 okumanın EN AZ 2'si uyarı eşiğini
+# aşmadan anomali İLAN EDİLMEZ. Tekil sıçramalar elenir; gerçek arızalar
+# 6-9 okuma sürdüğünden teyit 8-16 sn içinde gelir. Operasyonel karşılığı:
+# "sistem tek okumayla panik yapmaz, teyit eder."
+from collections import deque as _deque
+_son_skorlar: Dict[str, "_deque"] = {}
+
+
+def _teyitli_karar(eq_id: str, score: float) -> bool:
+    d = _son_skorlar.setdefault(eq_id, _deque(maxlen=3))
+    d.append(score)
+    return score >= UYARI_ESIGI and sum(1 for x in d if x >= UYARI_ESIGI) >= 2
+
 
 def _load_bundle(equipment_id: str) -> dict:
     """Ekipmanın model paketini getirir. Sıra: önbellek → disk → yerinde eğitim.
@@ -99,7 +114,7 @@ def detect(reading: Dict, equipment_id: Optional[str] = None) -> Dict:
     score = float(np.clip(
         np.interp(-raw, bundle["calib"]["xp"], bundle["calib"]["fp"]), 0.0, 1.0))
 
-    is_anomaly = score >= UYARI_ESIGI
+    is_anomaly = _teyitli_karar(eq_id, score)
 
     return {
         "is_anomaly":    bool(is_anomaly),

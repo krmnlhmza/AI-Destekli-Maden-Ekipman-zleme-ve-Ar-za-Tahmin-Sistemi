@@ -35,18 +35,13 @@ async def _live_stream():
     client.loop_start()
     print("MQTT publisher başladı (canlı yayın).")
 
-    cycle = 0
+    # Otomatik anomali/metan enjeksiyonu KAPALIDIR: arıza yalnız arayüzdeki
+    # Canlı Test senaryolarıyla (manuel) tetiklenir — demo tamamen kontrollü.
     try:
         while True:
             await asyncio.sleep(8)
-            cycle += 1
-            force_eq = random.choice(EQUIPMENT_IDS) if cycle % 15 == 0 else None
-            # ~her 25 döngüde bir rastgele ekipmanda metan kaçağı (İSG demo)
-            gas_eq = random.choice(EQUIPMENT_IDS) if cycle % 25 == 0 else None
             for eq_id in EQUIPMENT_IDS:
-                publish_reading(client, eq_id,
-                                force_anomaly=(eq_id == force_eq),
-                                force_gas=(eq_id == gas_eq))
+                publish_reading(client, eq_id)
     except asyncio.CancelledError:
         pass
     finally:

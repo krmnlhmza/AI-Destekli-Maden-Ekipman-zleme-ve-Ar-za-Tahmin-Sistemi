@@ -67,6 +67,13 @@ async def add_reading(
     db.add(record)
 
     if result["is_anomaly"]:
+        # Otomatik arıza tahmini (MQTT yoluyla AYNI zincir — tek yardımcı)
+        from app.services.mqtt_subscriber import otomatik_tahmin
+        tahmin_metni, rul_tahmin = await otomatik_tahmin(
+            db, data.equipment_id,
+            [data.temperature, data.vibration, data.pressure, data.current, data.speed])
+        result["description"] = (result["description"] or "") + tahmin_metni
+
         log = AnomalyLog(
             equipment_id=data.equipment_id,
             equipment_type=data.equipment_type,
@@ -84,24 +91,17 @@ async def add_reading(
             "time":           datetime.now(timezone.utc).isoformat(),
         }
         background_tasks.add_task(_save_to_qdrant, result["description"], metadata)
-        background_tasks.add_task(_notify_n8n, {**metadata, "description": result["description"]})
+        background_tasks.add_task(_notify_n8n, {**metadata,
+            "description": result["description"],
+            "rul_saat": rul_tahmin.get("rul_saat"),
+            "supheli_bilesen": rul_tahmin.get("baskin_sensor")})
+        if result["anomaly_score"] >= 0.7:
+            from app.services.mailer import kritik_anomali_bildir
+            background_tasks.add_task(kritik_anomali_bildir,
+                data.equipment_id, result["anomaly_score"], result["description"],
+                rul_tahmin.get("baskin_sensor"), rul_tahmin.get("rul_saat"))
 
-    # İSG metan alarmı (mutlak eşik)
-    if gas_eval["seviye"] != "NORMAL":
-        db.add(AnomalyLog(
-            equipment_id=data.equipment_id,
-            equipment_type=data.equipment_type,
-            anomaly_score=1.0,
-            description=f"İSG METAN {gas_eval['seviye']}: {gas_eval['mesaj']}",
-        ))
-        background_tasks.add_task(_notify_n8n, {
-            "equipment_id": data.equipment_id,
-            "tip":          "isg_metan",
-            "seviye":       gas_eval["seviye"],
-            "gas":          data.gas,
-            "description":  gas_eval["mesaj"],
-            "time":         datetime.now(timezone.utc).isoformat(),
-        })
+    # Metan/İSG alarmı kaldırıldı — kapsam kararı.
 
     await db.commit()
     await db.refresh(record)
@@ -140,14 +140,58 @@ async def get_history(
     return result.scalars().all()
 
 
+# (Senaryo 1) Fiziksel koşul seçimi — Türkçe etiketler arayüzde de kullanılır
+FAZ_ETIKETLERI = {
+    "idle": "Bekleme (rölanti)", "approach_pile": "Yığına yaklaşma",
+    "picking_up": "Kepçe doldurma", "hauling_loaded": "Yüklü taşıma",
+    "approach_dump": "Boşaltmaya yaklaşma", "dumping": "Boşaltma",
+    "returning_empty": "Boş dönüş",
+    "idle_waiting": "Bekleme", "getting_loaded": "Yüklenme",
+    "accelerating_loaded": "Yüklü hızlanma", "climbing_loaded": "Yokuş yukarı (yüklü)",
+    "arriving_dump": "Boşaltmaya yaklaşma", "descending_empty": "Yokuş aşağı (boş)",
+    "accelerating_empty": "Boş hızlanma",
+}
+
+
+@router.get("/mode/{equipment_id}")
+async def get_modes(equipment_id: str):
+    """Araç için seçilebilir fiziksel koşullar + aktif mod."""
+    from data.simulator import EQUIPMENT_PROFILES, _cycle_for, _get_state
+    if equipment_id not in EQUIPMENT_PROFILES:
+        return {"hata": "bilinmeyen araç"}
+    fazlar = [{"kod": f, "ad": FAZ_ETIKETLERI.get(f, f)}
+              for f, _ in _cycle_for(EQUIPMENT_PROFILES[equipment_id]["type"])]
+    st = _get_state(equipment_id)
+    return {"fazlar": fazlar, "aktif": st.manual_phase or "auto"}
+
+
+@router.post("/mode/{equipment_id}")
+async def set_mode(equipment_id: str, faz: str = Query(...)):
+    """(Senaryo 1) Fiziksel koşulu sabitle: faz=climbing_loaded | ... | auto"""
+    from data.simulator import EQUIPMENT_PROFILES, _cycle_for, set_manual_phase
+    if equipment_id not in EQUIPMENT_PROFILES:
+        return {"hata": "bilinmeyen araç"}
+    gecerli = [f for f, _ in _cycle_for(EQUIPMENT_PROFILES[equipment_id]["type"])]
+    if faz != "auto" and faz not in gecerli:
+        return {"hata": f"geçersiz faz: {faz}"}
+    set_manual_phase(equipment_id, faz)
+    return {"equipment_id": equipment_id, "mod": faz,
+            "ad": "Otomatik döngü" if faz == "auto" else FAZ_ETIKETLERI.get(faz, faz)}
+
+
 @router.post("/simulate/{equipment_id}", response_model=SensorReadingOut)
 async def simulate_reading(
     equipment_id: str,
+    background_tasks: BackgroundTasks,   # DİKKAT: varsayılan DEĞER VERME!
+    # FastAPI, BackgroundTasks'i yalnız varsayılansız parametrede enjekte eder;
+    # `= BackgroundTasks()` yazılırsa görevler kuyruğa alınır ama ASLA çalışmaz
+    # (e-posta/n8n bildirimlerinin sessizce kaybolduğu hatanın kök nedeni buydu).
     force_anomaly: bool = False,
     force_gas: bool = False,
-    background_tasks: BackgroundTasks = BackgroundTasks(),
+    ariza_tipi: str = None,   # (Senaryo 2) hedefli arıza: vibration_spike | overheat
     db: AsyncSession = Depends(get_db),
 ):
-    reading = generate_reading(equipment_id, force_anomaly=force_anomaly, force_gas=force_gas)
+    reading = generate_reading(equipment_id, force_anomaly=force_anomaly,
+                               force_gas=force_gas, fault_type=ariza_tipi)
     schema  = SensorReadingCreate(**reading)
     return await add_reading(schema, background_tasks, db)

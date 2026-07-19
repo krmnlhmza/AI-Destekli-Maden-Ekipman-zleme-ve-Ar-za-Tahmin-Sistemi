@@ -27,6 +27,47 @@ _client: mqtt.Client = None
 _loop: asyncio.AbstractEventLoop = None
 
 
+async def otomatik_tahmin(db, eq_id: str, guncel: list) -> tuple:
+    """OTOMATİK ARIZA TAHMİNİ (anomali → RUL zinciri) — paylaşılan yardımcı.
+
+    Anomali yakalanınca sistem kendi kendine LSTM'e sorar: "hangi bileşen
+    sorunlu, bu gidişle ne kadar ömür kaldı?" Hem MQTT yolu (canlı akış)
+    hem HTTP yolu (Canlı Test) bu TEK fonksiyonu kullanır.
+    Dönüş: (uyarı metnine eklenecek cümle, ham tahmin dict'i)"""
+    from sqlalchemy import select, desc as sql_desc
+    from app.models.sensor import SensorReading
+    from app.services.lstm_predictor import predict_rul, SEQ_LEN
+    try:
+        rows = await db.execute(
+            select(SensorReading)
+            .where(SensorReading.equipment_id == eq_id)
+            .order_by(sql_desc(SensorReading.time)).limit(SEQ_LEN - 1))
+        seq = [[r.temperature, r.vibration, r.pressure, r.current, r.speed]
+               for r in reversed(rows.scalars().all())]
+        seq.append(guncel)
+        if len(seq) < SEQ_LEN:
+            return "", {}
+        rul = await asyncio.get_event_loop().run_in_executor(
+            None, predict_rul, seq, eq_id)
+        if "rul_saat" not in rul:
+            return "", {}
+        # Ani sıçrama ile yavaş yıpranma ayrımı — mesaj ona göre kurulur
+        if rul["rul_saat"] >= 90:
+            metin = (f" || OTOMATİK TAHMİN → Şüpheli bileşen: {rul['baskin_sensor']} "
+                     f"(kritiğe yakınlık %{rul['sensor_doluluk']}). "
+                     f"Ani sapma karakterinde — kalıcı yıpranma trendi görülmedi; "
+                     f"bileşen kontrolü önerilir.")
+        else:
+            metin = (f" || OTOMATİK TAHMİN → Şüpheli bileşen: {rul['baskin_sensor']} "
+                     f"(kritiğe yakınlık %{rul['sensor_doluluk']}) · "
+                     f"tahmini kalan ömür ~{rul['rul_saat']} saat ({rul['durum']}) — "
+                     f"bakım planlaması önerilir.")
+        return metin, rul
+    except Exception as e:
+        print(f"  otomatik RUL tahmini yapılamadı: {e}")
+        return "", {}
+
+
 async def _handle_reading(reading: dict):
     """Tek bir sensör okumasını işler (ana event loop'ta çalışır)."""
     from datetime import datetime, timezone
@@ -56,50 +97,52 @@ async def _handle_reading(reading: dict):
             current        = reading["current"],
             speed          = reading["speed"],
             gas            = gas_val,
+            rpm            = reading.get("rpm"),
+            torque         = reading.get("torque"),
+            fuel           = reading.get("fuel"),
             is_anomaly     = result["is_anomaly"],
             anomaly_score  = result["anomaly_score"],
         ))
 
         if result["is_anomaly"]:
+            tahmin_metni, rul_tahmin = await otomatik_tahmin(
+                db, eq_id,
+                [reading["temperature"], reading["vibration"], reading["pressure"],
+                 reading["current"], reading["speed"]])
+
             db.add(AnomalyLog(
                 equipment_id   = eq_id,
                 equipment_type = reading.get("equipment_type"),
                 anomaly_score  = result["anomaly_score"],
-                description    = result["description"],
+                description    = (result["description"] or "") + tahmin_metni,
             ))
 
             payload = {
                 "equipment_id":  eq_id,
                 "anomaly_score": result["anomaly_score"],
-                "description":   result["description"],
+                "description":   (result["description"] or "") + tahmin_metni,
+                "rul_saat":      rul_tahmin.get("rul_saat"),
+                "supheli_bilesen": rul_tahmin.get("baskin_sensor"),
                 "temperature":   reading["temperature"],
                 "time":          datetime.now(timezone.utc).isoformat(),
             }
             loop = asyncio.get_event_loop()
             loop.run_in_executor(None, notify, payload)
+            # Kritik eşik (0.7) aşıldıysa araca tanımlı alıcıya e-posta
+            if result["anomaly_score"] >= 0.7:
+                from app.services.mailer import kritik_anomali_bildir
+                loop.run_in_executor(None, kritik_anomali_bildir,
+                    eq_id, result["anomaly_score"], payload["description"],
+                    rul_tahmin.get("baskin_sensor"), rul_tahmin.get("rul_saat"))
             loop.run_in_executor(
                 None, store_anomaly,
                 result["description"] or "anomali",
                 {"equipment_id": eq_id, "score": result["anomaly_score"]},
             )
 
-        # İSG metan alarmı — anomaliden bağımsız güvenlik kaydı + bildirim
-        if gas_alarm:
-            db.add(AnomalyLog(
-                equipment_id   = eq_id,
-                equipment_type = reading.get("equipment_type"),
-                anomaly_score  = 1.0,
-                description    = f"İSG METAN {gas_eval['seviye']}: {gas_eval['mesaj']}",
-            ))
-            asyncio.get_event_loop().run_in_executor(None, notify, {
-                "equipment_id":  eq_id,
-                "tip":           "isg_metan",
-                "seviye":        gas_eval["seviye"],
-                "gas":           gas_val,
-                "description":   gas_eval["mesaj"],
-                "time":          datetime.now(timezone.utc).isoformat(),
-            })
-
+        # Metan/İSG alarm üretimi kaldırıldı — kapsam kararı: sistemin İSG
+        # katkısı "ekipman arızasını önlemek"tir; gaz izleme ayrı modül.
+        # gas değeri DB'ye yazılmaya devam eder ama alarm/bildirim üretmez.
         await db.commit()
 
     # Redis: canlı dashboard için son durum (60 sn TTL)

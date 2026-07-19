@@ -59,7 +59,9 @@ class _Report(FPDF):
         self.cell(0, 5, f"Sayfa {self.page_no()}", align="R")
 
 
-def build_anomaly_report(rows: List[Dict], summary: Dict, hours: int) -> bytes:
+def build_anomaly_report(rows: List[Dict], summary: Dict, hours: int,
+                         rul_bilgileri: List[Dict] = None,
+                         rag_onerileri: List[Dict] = None) -> bytes:
     """
     rows    : recent_anomalies endpoint'inden gelen liste
               (her satırda: time, equipment_id, anomaly_score, description, resolved)
@@ -166,6 +168,40 @@ def build_anomaly_report(rows: List[Dict], summary: Dict, hours: int) -> bytes:
                     pdf.set_text_color(*COLOR_TEXT)
                 pdf.cell(w, 7, str(text), fill=fill, align="L")
             pdf.ln()
+
+    # ── ARIZA TAHMİNİ (LSTM) BÖLÜMÜ ─────────────────────
+    if rul_bilgileri:
+        pdf.ln(5)
+        pdf.set_font("DejaVu", "B", 11)
+        pdf.set_text_color(*COLOR_HEADER)
+        pdf.cell(0, 7, "Arıza Tahmini — Kalan Faydalı Ömür (LSTM)", ln=1)
+        pdf.set_draw_color(*COLOR_ACCENT)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(3)
+        pdf.set_font("DejaVu", "", 9)
+        for r in rul_bilgileri:
+            renk = COLOR_CRIT if r.get("durum") == "KRİTİK" else                    (245, 158, 11) if r.get("durum") == "UYARI" else (22, 101, 52)
+            pdf.set_text_color(*COLOR_TEXT)
+            pdf.cell(60, 7, f"{r['equipment_id']}")
+            pdf.set_text_color(*renk)
+            pdf.cell(40, 7, f"{r.get('durum','—')}")
+            pdf.set_text_color(*COLOR_TEXT)
+            pdf.cell(0, 7, f"kalan ömür ~{r.get('rul_saat','—')} saat · izlenen: {r.get('baskin_sensor','—')}", ln=1)
+
+    # ── SERVİS ASİSTANI ÖNERİLERİ (RAG) ──────────────────
+    if rag_onerileri:
+        pdf.ln(5)
+        pdf.set_font("DejaVu", "B", 11)
+        pdf.set_text_color(*COLOR_HEADER)
+        pdf.cell(0, 7, "Servis Asistanı Önerileri (RAG)", ln=1)
+        pdf.set_draw_color(*COLOR_ACCENT)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(3)
+        pdf.set_font("DejaVu", "", 9)
+        for o in rag_onerileri:
+            pdf.set_text_color(*COLOR_TEXT)
+            pdf.multi_cell(0, 6, f"• {o['baslik']}" +
+                           (f"  (Parça no: {o['parcalar']})" if o.get("parcalar") else ""))
 
     # ── ALT BİLGİ ────────────────────────────────────────
     pdf.ln(6)

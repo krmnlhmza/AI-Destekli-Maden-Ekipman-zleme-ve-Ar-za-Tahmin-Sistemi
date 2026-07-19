@@ -21,6 +21,8 @@ COLLECTION = "sandvik_knowledge"
 # E5 ailesi kuralı: dokümanlar "passage: ", sorgular "query: " önekiyle
 # kodlanır — öneksiz kullanılırsa arama kalitesi ciddi düşer.
 EMBED_MODEL = "ytu-ce-cosmos/turkish-e5-large"
+GREET_ESIK = 0.76   # sohbet kapısı eşiği (ölçüm: sohbet 0.78-0.89, teknik 0.65-0.74)
+_greet_centroid = None
 VECTOR_SIZE = 1024   # turkish-e5-large çıktı boyutu (eski MiniLM 384 idi)
 
 _encoder: SentenceTransformer = None
@@ -75,8 +77,8 @@ KNOWLEDGE_BASE = [
     {
         "id": "lh517-motor-01",
         "category": "Motor Sistemi",
-        "title": "LH517 Motor Sıcaklık Limitleri",
-        "content": "Sandvik LH517 motor normal çalışma sıcaklığı 70-90°C arasındadır. 95°C üzerinde uyarı alarmı devreye girer. 105°C üzerinde motor otomatik olarak kapatılır. Yüksek sıcaklık tespit edildiğinde: 1) Soğutma sıvısı seviyesini kontrol edin, 2) Radyatör temizliğini yapın, 3) Termostatı test edin.",
+        "title": "LH517 Motor ve Yağ Sıcaklığı Limitleri",
+        "content": "Sandvik LH517 motor/yağ sıcaklığı normal çalışma aralığı 70-90°C arasındadır. Motor yağı sıcaklığı bu aralığı aşarsa yağ viskozitesi düşer ve yatak aşınması hızlanır. 95°C üzerinde uyarı alarmı devreye girer. 105°C üzerinde motor otomatik olarak kapatılır. Belirtiler: yağ sıcaklığı yüksek, yağ lambası yandı, hararet, makine hararet yaptı, motor kaynadı, su attı, motor çok ısınıyor/kızıyor, sıcaklık göstergesi yükseliyor, buhar/sıcak koku, radyatör buharı. Yüksek sıcaklık tespit edildiğinde: 1) Yağ ve soğutma sıvısı seviyesini kontrol edin, 2) Yağ soğutucusunu (oil cooler) ve radyatörü temizleyin, 3) Termostatı test edin, 4) Yağ değişim aralığını (500 saat) doğrulayın.",
         "part_numbers": ["56037200", "56037201"],
         "failure_mode": "aşırı ısınma",
     },
@@ -93,7 +95,7 @@ KNOWLEDGE_BASE = [
         "id": "lh517-vibration-01",
         "category": "Titreşim ve Mekanik",
         "title": "LH517 Titreşim Eşikleri ve Rulman Bakımı",
-        "content": "Sandvik LH517 normal titreşim değeri 0-4.5 mm/s RMS'dir. 5-8 mm/s arası erken uyarı bölgesidir; rulman kontrolü önerilir. 8 mm/s üzeri kritik eşik olup makine durdurulmalıdır. Front Frame Assembly (P/N 56204783) bağlantı noktaları kontrol edilmelidir. Liftarms Bushing (P/N 56045500) 500 saat aralıklarla değiştirilmelidir.",
+        "content": "Sandvik LH517 normal titreşim değeri 0-4.5 mm/s RMS'dir. 5-8 mm/s arası erken uyarı bölgesidir; rulman kontrolü önerilir. 8 mm/s üzeri kritik eşik olup makine durdurulmalıdır. Belirtiler: titreme, titreşim, sarsıntı, sallanma, tıkırdama, takırtı, anormal ses/gürültü, rulman sesi, direksiyon/şasi titremesi, makine sarsıyor. Front Frame Assembly (P/N 56204783) bağlantı noktaları kontrol edilmelidir. Liftarms Bushing (P/N 56045500) 500 saat aralıklarla değiştirilmelidir.",
         "part_numbers": ["56204783", "56045500", "56045520"],
         "failure_mode": "aşırı titreşim",
     },
@@ -110,7 +112,7 @@ KNOWLEDGE_BASE = [
         "id": "lh517-hydraulic-01",
         "category": "Hidrolik Sistem",
         "title": "LH517 Hidrolik Basınç Değerleri",
-        "content": "LH517 hidrolik sistem çalışma basıncı 250-280 bar arasındadır. Düşük basınç (200 bar altı) pompa aşınması veya filtre tıkanmasına işaret eder. Yüksek basınç (290 bar üzeri) relief valve arızasını gösterir. Rear Tank Assembly (P/N 56037200) hidrolik yağ haznesi kapasitesi 120 litredir. Yağ değişim aralığı 1000 çalışma saatidir.",
+        "content": "LH517 hidrolik sistem çalışma basıncı 250-280 bar arasındadır. Düşük basınç (200 bar altı) pompa aşınması veya filtre tıkanmasına işaret eder. Belirtiler: zorlanma, güç kaybı, makine çekmiyor, kepçe kaldırmıyor veya yavaş kalkıyor, bom gücü zayıf, hidrolik zayıfladı, kaldırma performansı düşük, ağır çalışıyor. Yüksek basınç (290 bar üzeri) relief valve arızasını gösterir. Rear Tank Assembly (P/N 56037200) hidrolik yağ haznesi kapasitesi 120 litredir. Yağ değişim aralığı 1000 çalışma saatidir.",
         "part_numbers": ["56037200", "56037201", "56028042"],
         "failure_mode": "hidrolik basınç sapması",
     },
@@ -148,6 +150,15 @@ KNOWLEDGE_BASE = [
         "content": "Weighing System (P/N 56029901): Yük kapasitesi izleme sistemi. Wire Kit (P/N 56015599) ve Balance (P/N 56020567) ile kalibre edilir. Sensor Assembly (P/N 56046804): titreşim ve yük sensörlerini barındırır. Sensör arızası durumunda: 1) Bağlantı kablolarını kontrol edin, 2) Sensör sıfırlama prosedürünü uygulayın, 3) Kalibrasyon değerlerini doğrulayın.",
         "part_numbers": ["56029901", "56015599", "56020567", "56046804"],
         "failure_mode": "sensör arızası, yanlış okuma",
+    },
+    # Güç Aktarma
+    {
+        "id": "lh517-powertrain-01",
+        "category": "Güç Aktarma",
+        "title": "LH517 Devir, Tork ve Yakıt Tüketimi Değerleri",
+        "content": "LH517 motoru rölantide 800 d/dk, tam yükte 2100 d/dk devirde çalışır; tepe tork yaklaşık 2300 Nm'dir. Yakıt tüketimi rölantide ~8 L/sa, tam yük ve yokuş koşulunda 45-52 L/sa'e çıkar. Yakıt tüketimi artış nedenleri: hava filtresi tıkanıklığı, sürekli yokuş ve aşırı yük, yetersiz havalandırma nedeniyle düşük oksijen (motor zengin karışıma geçer), enjektör aşınması, düşük lastik basıncı, fren sürtünmesi. Tork düşüklüğü belirtileri: makine yokuşta zorlanıyor, çekiş zayıf; nedenleri: yakıt filtresi tıkanıklığı, turbo kaçağı, enjektör arızası. Belirtiler: yakıt fazla yakıyor, tüketim arttı, devir dalgalanıyor, tork düşük, çekmiyor.",
+        "part_numbers": ["56035422", "56021170"],
+        "failure_mode": "güç aktarma verimsizliği",
     },
     # Genel Bakım
     {
@@ -221,13 +232,32 @@ def query(question: str, limit: int = 3) -> List[Dict]:
     enc = _get_encoder()
     q   = _get_qdrant()
 
-    # E5 kuralı: sorgu tarafı "query: " önekiyle kodlanır
-    vector  = enc.encode(f"query: {question}").tolist()
+    # SOHBET KAPISI (anlamsal, kelime listesi DEĞİL): sorgu, selamlaşma
+    # örneklerinin anlam merkezine 0.76'dan yakınsa sohbettir → sonuç yok.
+    import numpy as _np
+    global _greet_centroid
+    if _greet_centroid is None:
+        ornekler = ["selam", "merhaba", "naber", "nasılsın", "günaydın",
+                    "iyi akşamlar", "ne haber dostum", "hava bugün çok güzel"]
+        vecs = enc.encode([f"query: {o}" for o in ornekler])
+        _greet_centroid = _np.mean(vecs, axis=0)
+        _greet_centroid /= _np.linalg.norm(_greet_centroid)
+    qv = _np.asarray(enc.encode(f"query: {question}"), dtype=float)
+    qv /= _np.linalg.norm(qv)
+    if float(qv @ _greet_centroid) >= GREET_ESIK:
+        return []
+
+    # Kısa sorgular (1-2 kelime, örn. "hararet") tek başına yeterli anlam
+    # taşımaz; arıza bağlamı eklenerek aranır
+    kisa = len(question.split()) <= 2
+    arama = f"makine arıza belirtisi: {question}" if kisa else question
+    vector = enc.encode(f"query: {arama}").tolist()
     response = q.query_points(
         collection_name=COLLECTION,
         query=vector,
         limit=limit,
-        score_threshold=0.3,
+        # Eşik 0.42 (ölçüm: sohbet 0.32-0.35, teknik 0.50-0.64 — tam orta)
+        score_threshold=0.42,
     )
 
     return [
