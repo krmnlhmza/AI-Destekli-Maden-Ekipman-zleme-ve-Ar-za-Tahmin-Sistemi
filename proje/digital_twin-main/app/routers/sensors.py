@@ -55,9 +55,12 @@ async def add_reading(
     db: AsyncSession = Depends(get_db),
 ):
     from data.simulator import gas_status
+    from app.services.anomaly_detector import yeni_olay_mu
 
     result   = detect_anomaly(data.model_dump())
     gas_eval = gas_status(float(data.gas or 0.0))
+    # Tek olay = tek alarm: episod boyunca yalnız ilk anomali okumasında tetikle
+    yeni_olay = yeni_olay_mu(data.equipment_id, result["is_anomaly"])
 
     record = SensorReading(
         **data.model_dump(),
@@ -66,7 +69,7 @@ async def add_reading(
     )
     db.add(record)
 
-    if result["is_anomaly"]:
+    if yeni_olay:
         # Otomatik arıza tahmini (MQTT yoluyla AYNI zincir — tek yardımcı)
         from app.services.mqtt_subscriber import otomatik_tahmin
         tahmin_metni, rul_tahmin = await otomatik_tahmin(

@@ -310,32 +310,25 @@ header .spacer{flex:1}
 
     <!-- ═ Saha aracı verileri (bağlantı yok — boş) ═ -->
     <div class="sec-head closed" onclick="toggleSec('saha')">
-      <span class="sh-t">Saha Aracı — Okunan Veri</span>
+      <span class="sh-t">Saha Aracı</span>
       <span class="sh-badge off">MQTT pasif</span>
       <span class="sh-arrow">▼</span>
     </div>
     <div class="sec-body closed" id="sec-saha">
       <div class="live-grid" id="saha-grid"></div>
-      <div class="saha-bos">Saha bağlantısı pasif — araç kapalı veya veri hattı kurulmadı. Bağlantı geldiğinde
-        değerler ve grafikler bu bölümde akar.</div>
+      <div class="saha-bos">Saha bağlantısı pasif.</div>
     </div>
 
     <div class="row2">
       <div class="panel" style="margin-bottom:0">
-        <div class="p-title"><span>Arıza Tahmini (LSTM)</span></div>
-        <div id="rul-box" class="mini">Aktif arıza tespiti bulunmuyor. Tahmin, anomali
-          tespit edildiğinde otomatik olarak üretilir ve bu alanda görüntülenir.</div>
+        <div class="p-title"><span>Kalan Faydalı Ömür Tahmini (RUL · LSTM)</span></div>
+        <div id="rul-box" class="mini">Sistem normal — aktif arıza tahmini yok.</div>
       </div>
       <div class="panel" style="margin-bottom:0">
         <div class="p-title"><span>Canlı Test</span>
-          <span class="info-dot" tabindex="0">!<span class="info-pop" id="test-info-pop">Bu test, sistemin arıza
-            anındaki tepkisini göstermek için dijital ikize kontrollü bir durum verir (yalnız demo; gerçekte veri
-            sahadan gelir). Sıradaki senaryo: <b>Yağ / Hidrolik Pompa Arızası</b>.</span></span>
+          <span class="info-dot" tabindex="0">!<span class="info-pop" id="test-info-pop">Kontrollü bir arıza durumu verir (yalnız demo). Sıradaki: <b>Yağ / Hidrolik Pompa Arızası</b>.</span></span>
         </div>
-        <div class="mini" style="margin-bottom:12px;line-height:1.5">Sistemin arıza anındaki tepkisini canlı gösterir:
-          anomali tespiti → kalan faydalı ömür tahmini → teknik asistan çözümü. Sonucu aşağıdaki panolardan ve 2B ikizden izleyin.</div>
-        <button class="btn" id="ariza-btn" style="width:100%" onclick="arizaEnjekte()">Testi Başlat</button>
-        <div class="mini" id="livetest-out" style="margin-top:10px"></div>
+        <button class="btn" id="ariza-btn" style="width:100%;margin-top:2px" onclick="arizaEnjekte()">Testi Başlat</button>
       </div>
     </div>
   </div>
@@ -493,8 +486,8 @@ function selectVehicle(id){
   document.getElementById('vh-crumb').textContent =
     `${state.mine.ad} · ${state.vehicle.id} · ${state.vehicle.tip}`;
   window._prevAnom = false; _rulSon = 0;
-  document.getElementById('rul-box').innerHTML = 'Aktif arıza tespiti bulunmuyor. Tahmin, anomali tespit edildiğinde otomatik olarak üretilir ve bu alanda görüntülenir.';
-  document.getElementById('livetest-out').textContent = '';
+  document.getElementById('rul-box').innerHTML = 'Sistem normal — aktif arıza tahmini yok.';
+  window._testActive=false; window._testSeen=false;
   _arizaIdx = 0; arizaNextLabel();
   buildLiveGrid(); buildSahaGrid(); twinBuild(); simChartsReset(); simMqttBadge();
   refreshLive();
@@ -530,8 +523,27 @@ async function refreshLive(){
     });
     twinUpdate(d);
     /* Anomali başladığı an arıza tahmini bildirimi (zincir: tespit → tahmin) */
-    if(d.is_anomaly){ rulNotify(); if(!window._prevAnom) pollAlarmCount(); }
+    if(d.is_anomaly){
+      if(!window._prevAnom){
+        /* Anomali doğrulandı → LSTM'e "analiz" süresi (yapay/anlık durmasın) */
+        document.getElementById('rul-box').innerHTML =
+          '<div class="mini">Anomali doğrulandı. LSTM, son 20 okumanın zaman serisini değerlendiriyor…</div>';
+        _rulSon = Date.now();
+        setTimeout(()=>{ _rulSon = 0; rulNotify(); }, 4000);
+        pollAlarmCount();
+      } else {
+        rulNotify();
+      }
+    }
     window._prevAnom = d.is_anomaly;
+    /* Canlı Test bitişi: anomali görülüp temizlendiğinde butonu tekrar aç */
+    if(window._testActive){
+      if(d.is_anomaly) window._testSeen=true;
+      else if(window._testSeen){
+        const b=document.getElementById('ariza-btn'); if(b) b.disabled=false;
+        window._testActive=false; window._testSeen=false;
+      }
+    }
   }catch(e){}
 }
 
@@ -638,7 +650,7 @@ async function simMqttBadge(){
 /* ── Arıza Tahmini bildirimi: YALNIZ anomali tespitine bağlı ── */
 let _rulSon = 0;
 async function rulNotify(){
-  if(Date.now() - _rulSon < 15000) return;   /* anomali sürerken 15 sn'de bir tazele */
+  if(Date.now() - _rulSon < 6000) return;   /* anomali sürerken periyodik tazele */
   _rulSon = Date.now();
   try{
     const r=await fetch(`${API}/predict/rul/${state.vehicle.id}`);
@@ -646,21 +658,17 @@ async function rulNotify(){
     if(!d.rul_saat && d.rul_saat!==0) return;
     const ts = new Date().toLocaleTimeString('tr-TR');
     const box=document.getElementById('rul-box');
-    if(d.rul_saat>=90){
-      box.innerHTML = `<div style="font-size:0.9rem;color:var(--text);line-height:1.6">
-        <b style="color:var(--yellow)">Ani sapma tespit edildi.</b><br>
-        Şüpheli bileşen: <b>${d.baskin_sensor}</b> (kritik eşiğe yakınlık %${d.sensor_doluluk}).<br>
-        Kalıcı yıpranma trendi gözlenmedi; ilgili bileşenin fiziksel kontrolü önerilir.</div>
-        <div class="mini" style="margin-top:8px">Tespit zamanı: ${ts}</div>`;
-    }else{
-      const renk = d.renk==='kirmizi'?'var(--red)':d.renk==='sari'?'var(--yellow)':'var(--green)';
-      box.innerHTML = `<div style="font-size:0.9rem;color:var(--text);line-height:1.6">
-        <b style="color:${renk}">Arıza gelişimi tespit edildi.</b><br>
-        Şüpheli bileşen: <b>${d.baskin_sensor}</b> (kritik eşiğe yakınlık %${d.sensor_doluluk}).<br>
-        Tahmini kalan faydalı ömür: <b>~${Math.round(d.rul_saat)} saat</b> — ${d.durum}.<br>
-        ${d.rul_saat<8?'Acil bakım iş emri oluşturulması':'Planlı bakım penceresi ayarlanması'} önerilir.</div>
-        <div class="mini" style="margin-top:8px">Tespit zamanı: ${ts}</div>`;
-    }
+    const renk = d.renk==='kirmizi'?'var(--red)':d.renk==='sari'?'var(--yellow)':'var(--green)';
+    const arac = state.vehicle ? state.vehicle.ad : d.equipment_id;
+    box.innerHTML = `<div style="font-size:0.86rem;line-height:1.75">
+      <div style="font-weight:700;color:${renk};letter-spacing:0.3px;margin-bottom:8px">
+        ${d.durum} · ${d.ariza||'Arıza gelişimi'}</div>
+      <div><span style="color:var(--mut)">Etkilenen sistem:</span> ${d.sistem||d.baskin_sensor} — ${arac}</div>
+      <div><span style="color:var(--mut)">Tahmini kalan faydalı ömür (RUL):</span> <b>~${Math.round(d.rul_saat)} saat</b></div>
+      <div style="margin-top:4px"><span style="color:var(--mut)">Gerekçe:</span> ${d.gerekce||''}</div>
+      <div style="margin-top:6px;color:var(--text)">${d.oneri||''}</div>
+      <div style="margin-top:8px;font-size:0.72rem;color:var(--mut2)">Tespit zamanı: ${ts}</div>
+    </div>`;
   }catch(e){}
 }
 
@@ -673,6 +681,10 @@ const ARIZALAR = [
   {kod:'rulman',      ad:'Rulman Arızası',                imza:'titreşim çok yükselir, sıcaklık hafif artar'},
   {kod:'overheat',    ad:'Motor Aşırı Isınması',          imza:'yağ sıcaklığı kritik eşiğe çıkar, akım artar'},
   {kod:'enjektor',    ad:'Enjektör / Yanma Arızası',      imza:'titreşim (misfire) ve yakıt artar, tork düşer'},
+  {kod:'overcurrent', ad:'Aşırı Akım (Motor Sargı)',      imza:'sürücü motor akımı çok yükselir, sargı ısınır'},
+  {kod:'fren',        ad:'Fren Aşırı Isınması',           imza:'fren sıcaklığı yükselir, hız düşer, titreşim artar'},
+  {kod:'transmisyon', ad:'Transmisyon Arızası',           imza:'şanzıman titreşimi ve yağ sıcaklığı artar'},
+  {kod:'sogutma',     ad:'Soğutma Sistemi Arızası',       imza:'radyatör/fan yetersiz, motor sıcaklığı sürekli yükselir'},
 ];
 let _arizaIdx = 0;
 /* Köşedeki "!" balonu: enjekte edilen arıza yalnız burada görünür (kutuda değil). */
@@ -687,19 +699,17 @@ function arizaNextLabel(gecmis){
        (yalnız demo; gerçekte veri sahadan gelir). ${sirada}`;
 }
 async function arizaEnjekte(){
-  const out=document.getElementById('livetest-out');
   const btn=document.getElementById('ariza-btn');
   const a=ARIZALAR[_arizaIdx];
-  btn.disabled=true;
-  out.textContent='Canlı test başlatıldı — sistem sensör verisini analiz ediyor…';
+  btn.disabled=true;                       // test sürerken kilitli
+  window._testActive=true; window._testSeen=false;
   try{
     await fetch(`${API}/sensors/simulate/${state.vehicle.id}?force_anomaly=true&ariza_tipi=${a.kod}`,{method:'POST'});
-    out.innerHTML=`Test çalışıyor. Sistem, gelen veriyi gerçek zamanlı değerlendiriyor; anomali ~10-20 sn içinde
-      doğrulanır. 2B ikiz, Arıza Tahmini ve Uyarılar bölümünü izleyin — ardından Servis Asistanı'na danışabilirsiniz.`;
-  }catch(e){ out.textContent='Test başlatılamadı.'; }
+  }catch(e){ btn.disabled=false; window._testActive=false; return; }
   _arizaIdx = (_arizaIdx + 1) % ARIZALAR.length;
-  arizaNextLabel(a.ad);   // balonda "az önce verilen" + "sıradaki" güncellenir
-  setTimeout(()=>{ btn.disabled=false; }, 4000);
+  arizaNextLabel(a.ad);                     // balonda "az önce verilen" + "sıradaki"
+  // Güvenlik ağı: anomali temizlenmese bile en geç 22 sn sonra buton açılır
+  setTimeout(()=>{ if(window._testActive){ btn.disabled=false; window._testActive=false; } }, 22000);
 }
 
 /* ── 2B Dijital İkiz motoru ──

@@ -193,6 +193,30 @@ KNOWLEDGE_BASE = [
         "part_numbers": ["56205923", "56013070", "56039605"],
         "failure_mode": "yangın, güvenlik sistemi",
     },
+    {
+        "id": "lh517-brake-01",
+        "category": "Fren Sistemi",
+        "title": "LH517 Fren Sistemi ve Aşırı Isınma",
+        "content": "LH517 SAHR (yay uygulamalı, hidrolik boşaltmalı) ıslak disk fren sistemi kullanır. Normal fren yüzey sıcaklığı 120°C altındadır; 180°C üzeri aşırı ısınma, balata sürtmesi (fren dragı) veya soğutma yağı yetersizliğini gösterir. Belirtiler: fren tutmuyor/zayıf, fren kokusu, yanık kokusu, makine yavaşlıyor/sürtüyor, fren sıcak, duruş mesafesi uzadı, yokuşta kayma. Yeraltında fren arızası ölümcül İSG riskidir — üretici sınırının altında aşınmış balatayla çalıştırma yasaktır. Fren aşırı ısınmasında: 1) Fren soğutma yağı seviyesi ve sıcaklığını kontrol edin, 2) Balata aşınmasını ölçün (min. kalınlık), 3) Fren boşaltma basıncını doğrulayın, 4) Park freni ayarını kontrol edin. Brake Disc Kit (P/N 56042100), Brake Cooling Pump (P/N 56033120).",
+        "part_numbers": ["56042100", "56033120"],
+        "failure_mode": "fren aşırı ısınması, fren arızası",
+    },
+    {
+        "id": "lh517-transmission-01",
+        "category": "Güç Aktarma",
+        "title": "LH517 Transmisyon / Şanzıman Arızası",
+        "content": "LH517 güç aktarma organında (tork konvertör + şanzıman) dişli ve rulman aşınması yüksek titreşim ve şanzıman yağ sıcaklığı artışı üretir. Normal şanzıman yağ sıcaklığı 80-110°C; 120°C üzeri ve titreşim artışı iç aşınmayı gösterir. Belirtiler: vites atıyor/kaçırıyor, güç aktarmıyor, titreşim/gürültü, şanzıman sıcak, hızlanma zayıf, sarsıntılı hareket, metalik ses. Transmisyon arızasında: 1) Şanzıman yağı seviyesi/rengini kontrol edin (metal talaşı), 2) Yağ sıcaklığı ve soğutucusunu kontrol edin, 3) Tork konvertör basıncını ölçün, 4) Yağ ve filtreyi 1000 saatte değiştirin. Transmission Assembly (P/N 56048800), Oil Filter (P/N 56034120).",
+        "part_numbers": ["56048800", "56034120"],
+        "failure_mode": "transmisyon arızası, dişli aşınması",
+    },
+    {
+        "id": "lh517-cooling-01",
+        "category": "Soğutma Sistemi",
+        "title": "LH517 Soğutma Sistemi ve Radyatör",
+        "content": "LH517 motor soğutma sistemi radyatör, fan, su pompası ve termostattan oluşur. Normal soğutma sıvısı sıcaklığı 70-90°C; radyatör tıkanıklığı, fan arızası, düşük soğutma sıvısı veya termostat arızasında motor sıcaklığı sürekli yükselir. Belirtiler: motor ısınıyor/hararet yapıyor, sıcaklık düşmüyor, soğutma sıvısı eksiliyor, fan dönmüyor, radyatör tıkalı/kirli, buhar. Motor iç arızasından farkı: akım normaldir, sorun soğutma tarafındadır. Soğutma sistemi arızasında: 1) Soğutma sıvısı seviyesi ve kaçak kontrolü, 2) Radyatör peteklerini basınçlı hava ile temizleyin, 3) Fan ve kayışını kontrol edin, 4) Termostat ve su pompasını test edin. Radiator Assembly (P/N 56035400), Cooling Fan (P/N 56035420), Water Pump (P/N 56035440).",
+        "part_numbers": ["56035400", "56035420", "56035440"],
+        "failure_mode": "soğutma arızası, radyatör tıkanıklığı",
+    },
 ]
 
 

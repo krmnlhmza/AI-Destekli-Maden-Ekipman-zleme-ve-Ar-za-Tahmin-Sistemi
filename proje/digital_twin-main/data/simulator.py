@@ -223,6 +223,10 @@ class EquipmentRuntimeState:
     # bir saniyeliğine bozulup düzelmez. Enjeksiyon 4-6 okuma sürer;
     # böylece hem simülasyon gerçekçi olur hem de tespit güvenilirliği artar
     # (tek okumada ~%60-70 yakalanan arıza, 4-6 ardışık okumada ~%100).
+    last_fault:    Optional[str] = None       # (Senaryo 2) son enjekte arıza tipi
+    last_fault_ts: Optional[datetime] = None  # ve zamanı — RUL gömme penceresi için:
+    # forced_fault sönse bile enjeksiyondan ~25 sn içinde RUL bu arızayı gösterir
+    # (rulNotify ile forced_fault arasındaki zamanlama yarışını kapatır).
 
 
 _states: Dict[str, EquipmentRuntimeState] = {}
@@ -319,10 +323,15 @@ def _compute_reading(equipment_id: str, state: EquipmentRuntimeState) -> dict:
     # ── Titreşim ──────────────────────────────────────────────
     v_lo, v_hi = profile["vibration"]
     v_range = v_hi - v_lo
-    v = v_lo + 0.3 * v_range * vib_mul              # faza göre baz
-    v += v_range * 0.6 * wear                       # yıpranmış rulman → titreşim
-    v += v_range * 0.2 * load                       # yük → titreşim
-    v += np.random.normal(0, v_range * 0.08)
+    # Titreşim motor aktivitesiyle orantılı: devir (≈throttle) arttıkça artar;
+    # yük ve faz karakteri (kepçe/boşaltma/bozuk yol) ek katkı verir; yıpranma
+    # tabanı yükseltir. Böylece devir–tork–titreşim birlikte hareket eder.
+    v = v_lo + v_range * 0.15                       # rölanti motor titreşimi (taban)
+    v += v_range * 0.30 * throttle                  # devir arttıkça titreşim
+    v += v_range * 0.15 * load                      # yük → titreşim
+    v += v_range * 0.30 * max(0.0, vib_mul - 1.0)   # faza özel ek (kepçe/boşaltma/bozuk yol)
+    v += v_range * 0.45 * wear                      # yıpranmış rulman → titreşim
+    v += np.random.normal(0, v_range * 0.06)
     v  = max(0.05, v)
 
     # ── Hidrolik basınç ───────────────────────────────────────
@@ -336,9 +345,11 @@ def _compute_reading(equipment_id: str, state: EquipmentRuntimeState) -> dict:
     # ── Hız ───────────────────────────────────────────────────
     s_lo, s_hi = profile["speed"]
     s_range = s_hi - s_lo
-    s = s_lo + spd_mul * s_range
-    s += np.random.normal(0, s_range * 0.05)
-    s  = max(0.0, s)
+    if spd_mul <= 0.0:
+        s = 0.0                       # durağan faz (rölanti/yüklenme) → hız tam 0
+    else:
+        s = s_lo + spd_mul * s_range + np.random.normal(0, s_range * 0.05)
+        s = max(0.0, s)
 
     # ── Devir / Tork / Yakıt (güç aktarma — fizik korelasyonlu) ──
     # Devir gaz pedalını izler; tork yük+gazla; yakıt devir+yük+yıpranmayla
@@ -350,6 +361,13 @@ def _compute_reading(equipment_id: str, state: EquipmentRuntimeState) -> dict:
            + np.random.normal(0, (tq_hi - tq_lo) * 0.03)
     if cooling:
         tork *= 0.35          # yokuş aşağı: motor freni, tork düşük
+
+    # ── Rölanti (durağan + yüksüz): motor sabit rölanti devrinde döner, araç
+    # durur, tahrik torku ~0'dır. Değerler ekranda titremesin diye çok az
+    # gürültüyle neredeyse sabit tutulur.
+    if spd_mul <= 0.0 and load <= 0.0 and throttle <= 0.15:
+        rpm  = r_lo + np.random.normal(0, (r_hi - r_lo) * 0.004)   # sabit rölanti devri
+        tork = max(0.0, tq_lo * 0.03 + np.random.normal(0, tq_lo * 0.004))  # ~sabit, ~0
     f_lo, f_hi = profile["fuel"]
     yakit = f_lo + (f_hi - f_lo) * min(1.0, 0.55 * throttle + 0.35 * load + 0.15 * wear) \
             + np.random.normal(0, (f_hi - f_lo) * 0.04)
@@ -397,8 +415,26 @@ def _compute_reading(equipment_id: str, state: EquipmentRuntimeState) -> dict:
             yakit *= np.random.uniform(1.20, 1.35)
             tork *= np.random.uniform(0.60, 0.75)
             t = max(t, hi_t * np.random.uniform(1.02, 1.06))
+        elif ff == "fren":
+            # Fren aşırı ısınması: sürtünme ısısı → sıcaklık yükselir; balata
+            # sürtmesi → titreşim ve düşük/düzensiz hız (fren dragı).
+            t = max(t, _crit["temperature"] * np.random.uniform(0.80, 0.92))
+            v = max(v, _crit["vibration"] * np.random.uniform(0.55, 0.75))
+            s = s * np.random.uniform(0.25, 0.45)
+        elif ff in ("transmisyon", "sanziman"):
+            # Transmisyon/güç aktarma arızası: dişli/rulman hasarı → yüksek
+            # titreşim + şanzıman yağ sıcaklığı yükselir.
+            v = max(v, _crit["vibration"] * np.random.uniform(0.75, 0.95))
+            t = max(t, hi_t * np.random.uniform(1.06, 1.14))
+        elif ff in ("sogutma", "cooling"):
+            # Soğutma sistemi arızası (radyatör/fan): soğutma verimi düşer →
+            # sıcaklık sürekli yükselir (akım normal — motorun kendisi değil).
+            t = max(t, _crit["temperature"] * np.random.uniform(0.88, 1.02))
         elif ff == "overcurrent":
+            # Aşırı akım / motor sargı zorlanması: akım sürekli üst sınırın
+            # üstünde + sargı ısınması.
             c = max(c, _crit["current"] * np.random.uniform(0.90, 1.08))
+            t = max(t, hi_t * np.random.uniform(1.03, 1.10))
         elif ff == "pressure_surge":
             p = max(p, _crit["pressure"] * np.random.uniform(0.92, 1.08))
     if state.forced_fault:
@@ -456,11 +492,15 @@ def generate_reading(equipment_id: str, force_anomaly: bool = False,
     if force_anomaly:
         # (Senaryo 2) fault_type verilirse O arıza enjekte edilir; yoksa rastgele
         state.forced_fault = fault_type or np.random.choice(
-            ["yag_pompasi", "rulman", "overheat", "enjektor"]
+            ["yag_pompasi", "rulman", "overheat", "enjektor",
+             "overcurrent", "fren", "transmisyon", "sogutma"]
         )
-        # 3s yayında ~10-14 okuma = ~30-42 sn: jüri arıza → tespit → LSTM → RAG
-        # zincirini rahat izler; 3/5 teyit için fazlasıyla yeterli.
-        state.fault_readings_left = int(np.random.randint(10, 15))
+        state.last_fault = state.forced_fault
+        state.last_fault_ts = datetime.now(timezone.utc)
+        # Kısa tek olay: enjekte arıza garanti tespit edildiğinden bu pencere
+        # ≈ grafikteki anomali nokta sayısıdır. 4 okuma ≈ kısa bir spike; arıza
+        # bitince anomali hemen temizlenir. Alarm kenar-tetikli olduğundan tek düşer.
+        state.fault_readings_left = int(np.random.randint(3, 5))
 
     reading = _compute_reading(equipment_id, state)
 

@@ -73,7 +73,7 @@ async def _handle_reading(reading: dict):
     from datetime import datetime, timezone
     from app.database import AsyncSessionLocal
     from app.models.sensor import SensorReading, AnomalyLog
-    from app.services.anomaly_detector import detect as detect_anomaly
+    from app.services.anomaly_detector import detect as detect_anomaly, yeni_olay_mu
     from app.services.n8n_notifier import notify
     from app.services.embedding_service import store_anomaly
     from app.redis_client import redis_client
@@ -81,6 +81,8 @@ async def _handle_reading(reading: dict):
 
     eq_id = reading.get("equipment_id", "unknown")
     result = detect_anomaly(reading)
+    # Tek olay = tek alarm: episod boyunca yalnız ilk anomali okumasında tetikle
+    yeni_olay = yeni_olay_mu(eq_id, result["is_anomaly"])
 
     # Metan (İSG) değerlendirmesi — mutlak eşik, ML'den bağımsız
     gas_val = float(reading.get("gas", 0.0))
@@ -104,7 +106,7 @@ async def _handle_reading(reading: dict):
             anomaly_score  = result["anomaly_score"],
         ))
 
-        if result["is_anomaly"]:
+        if yeni_olay:
             tahmin_metni, rul_tahmin = await otomatik_tahmin(
                 db, eq_id,
                 [reading["temperature"], reading["vibration"], reading["pressure"],

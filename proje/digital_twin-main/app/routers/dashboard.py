@@ -99,10 +99,33 @@ async def timeseries(
     # Yeni kolonların (rpm/tork/yakıt) eski kayıtları NULL'dur — atla,
     # yoksa float(None) 500 hatası üretir
     data = [r for r in rows.all() if r[1] is not None]
+
+    # Kırmızı nokta YALNIZ ilgili grafiğe konur: bir anomali anında TÜM
+    # sensör grafikleri değil, o an normal bandının DIŞINA çıkan (sapan)
+    # sensörün grafiği işaretlenir. "anomaly_score" grafiği ise tespit
+    # anlarını (is_anomaly) gösterir. Böylece hangi değerin anomaliyi
+    # ürettiği grafik üzerinde doğrudan görülür.
+    from data.simulator import EQUIPMENT_PROFILES
+    band = EQUIPMENT_PROFILES.get(equipment_id, {}).get(metric)  # (lo, hi) | None
+
+    def _isaretle(val: float, is_anom: bool) -> bool:
+        if not is_anom:
+            return False
+        if metric == "anomaly_score":
+            return True                       # tespit grafiği: tüm anomaliler
+        if not band:
+            return False
+        lo, hi = band
+        # Eşik nominal üst/alt sınırın belirgin ötesinde: yüksek-yük fazında
+        # akım/sıcaklık profil üst sınırını doğal olarak biraz aşabilir; sahte
+        # işaret olmasın diye %15 marj (aşağı basınç için %15 altı). Enjekte
+        # arızalar kritik seviyeye gittiğinden bu marjı rahatça geçer.
+        return val > hi * 1.15 or val < lo * 0.85
+
     return {
         "labels": [r[0].isoformat() for r in data],
         "values": [round(float(r[1]), 3) for r in data],
-        "anomalies": [r[2] for r in data],
+        "anomalies": [_isaretle(float(r[1]), r[2]) for r in data],
     }
 
 
