@@ -326,7 +326,7 @@ header .spacer{flex:1}
       </div>
       <div class="panel" style="margin-bottom:0">
         <div class="p-title"><span>Canlı Test</span>
-          <span class="info-dot" tabindex="0">!<span class="info-pop" id="test-info-pop">Kontrollü bir arıza durumu verir (yalnız demo). Sıradaki: <b>Yağ / Hidrolik Pompa Arızası</b>.</span></span>
+          <span class="info-dot" tabindex="0">!<span class="info-pop" id="test-info-pop">Canlı test, dijital ikizin (simülatörün) kendiliğinden anormal değer üretmesini beklemeden, sistemin arıza anındaki tepkisini — tespit, kalan ömür tahmini ve teknik asistan — kontrollü biçimde görmek içindir. (Yalnız demo amaçlıdır.)</span></span>
         </div>
         <button class="btn" id="ariza-btn" style="width:100%;margin-top:2px" onclick="arizaEnjekte()">Testi Başlat</button>
       </div>
@@ -488,7 +488,7 @@ function selectVehicle(id){
   window._prevAnom = false; _rulSon = 0;
   document.getElementById('rul-box').innerHTML = 'Sistem normal — aktif arıza tahmini yok.';
   window._testActive=false; window._testSeen=false;
-  _arizaIdx = 0; arizaNextLabel();
+  /* Canlı Test sırası GLOBAL: araç değişince sıfırlanmaz, kaldığı yerden devam eder */
   buildLiveGrid(); buildSahaGrid(); twinBuild(); simChartsReset(); simMqttBadge();
   refreshLive();
   timers.push(setInterval(refreshLive, 2500));
@@ -686,18 +686,7 @@ const ARIZALAR = [
   {kod:'transmisyon', ad:'Transmisyon Arızası',           imza:'şanzıman titreşimi ve yağ sıcaklığı artar'},
   {kod:'sogutma',     ad:'Soğutma Sistemi Arızası',       imza:'radyatör/fan yetersiz, motor sıcaklığı sürekli yükselir'},
 ];
-let _arizaIdx = 0;
-/* Köşedeki "!" balonu: enjekte edilen arıza yalnız burada görünür (kutuda değil). */
-function arizaNextLabel(gecmis){
-  const el=document.getElementById('test-info-pop');
-  if(!el) return;
-  const sirada = `Sıradaki senaryo: <b>${ARIZALAR[_arizaIdx].ad}</b>.`;
-  el.innerHTML = gecmis
-    ? `Az önce verilen durum: <b>${gecmis}</b>.<br>Bu, sistemin tepkisini göstermek için dijital ikize
-       verilen kontrollü bir senaryodur (yalnız demo). ${sirada}`
-    : `Bu test, sistemin arıza anındaki tepkisini göstermek için dijital ikize kontrollü bir durum verir
-       (yalnız demo; gerçekte veri sahadan gelir). ${sirada}`;
-}
+let _arizaIdx = 0;   /* GLOBAL sıra: araçlar arası sıfırlanmaz. "!" balonu sabittir. */
 async function arizaEnjekte(){
   const btn=document.getElementById('ariza-btn');
   const a=ARIZALAR[_arizaIdx];
@@ -707,7 +696,6 @@ async function arizaEnjekte(){
     await fetch(`${API}/sensors/simulate/${state.vehicle.id}?force_anomaly=true&ariza_tipi=${a.kod}`,{method:'POST'});
   }catch(e){ btn.disabled=false; window._testActive=false; return; }
   _arizaIdx = (_arizaIdx + 1) % ARIZALAR.length;
-  arizaNextLabel(a.ad);                     // balonda "az önce verilen" + "sıradaki"
   // Güvenlik ağı: anomali temizlenmese bile en geç 22 sn sonra buton açılır
   setTimeout(()=>{ if(window._testActive){ btn.disabled=false; window._testActive=false; } }, 22000);
 }
@@ -1006,12 +994,12 @@ async function sendChat(){
         ${s.part_numbers.length?`<div class="src">Parça no: ${s.part_numbers.join(', ')}</div>`:''}
         <div class="src">Kaynak: servis dokümantasyonu · uyum %${(s.score*100).toFixed(0)}</div>`;
     }else{
-      wait.innerHTML=`Sorgunuz, yüklü bilgi tabanındaki dokümanlarla güvenilir eşleşme eşiğini aşamadı.
+      wait.innerHTML=`Bu soru için vektörlenmiş dokümanlarda güvenilir eşleşme bulunamadı.
         Doğruluk ilkesi gereği düşük güvenilirlikli sonuç listelenmez.
-        Mevcut dokümantasyon kapsamı: <b>motor/yağ sıcaklığı · titreşim/rulman · hidrolik basınç ·
-        elektrik · yağlama · sensörler · güç aktarma (devir/tork/yakıt) · bakım · güvenlik</b>.
+        Bu prototipte servis manuelinin yalnızca <b>temsili bir örneği</b> gömülüdür
+        (<b>hidrolik pompa / basınç</b> ve <b>motor akımı</b>).
         Örnek: <i>"hidrolik basınç düşüklüğünün nedeni nedir?"</i>
-        <div class="src">Not: Üreticinin tam servis manuelleri yüklendiğinde (İP-8) kapsam binlerce sayfaya çıkacaktır.</div>`;
+        <div class="src">Üreticinin tam servis manuelleri vektörlendiğinde (İP-8, final) kapsam binlerce sayfaya çıkacak ve tüm arızalar yanıtlanacaktır.</div>`;
     }
   }catch(e){ wait.textContent='Bağlantı hatası.'; }
 }
